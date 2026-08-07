@@ -224,7 +224,9 @@ Footer entries are sorted deterministically. Built-in sort keys include slug, da
 
 The graph JSON artifact is a normalized snapshot of compiled graph relationships. Each visible section records its parent, whether the parent was explicitly specified, sorted references, and sorted backlinks. The metadata JSON artifact records visible section metadata only; internal anonymous subtree sections are excluded.
 
-RSS generation uses compiled sections after graph resolution. Collection pages and the index page are excluded from feed items. Item order is reverse date order with slug fallback. Item descriptions are derived by stripping HTML, collapsing whitespace, and truncating to a fixed summary length. Full item content is included as encoded HTML content. Invalid or relative RSS base URLs are rejected before the feed is written.
+RSS generation uses compiled sections after graph resolution. Collection pages and the index page are excluded from feed items. Item order is reverse date order with slug fallback. Full item content is included as encoded HTML content, with the sequence that would close a CDATA section split so it cannot. Invalid or relative RSS base URLs are rejected before the feed is written, because a feed is read away from the site and its links must stand alone. Pages carry a feed autodiscovery link, gated on the same condition that writes the feed so preview builds never advertise one that does not exist.
+
+Item descriptions are plain text recovered from the rendered HTML, which is more delicate than it sounds and was wrong in three ways at once. The article header is dropped, or a summary opens with the taxon, title, slug and date that the reader already sees as the item's own title and pubDate. Entities are unescaped, because the text is escaped again on its way into XML and skipping that shows readers a literal `&amp;`. And the extraction cannot use the display-side tag stripper: that is a regex whose tag-name pattern matched letters only, so every `<h1>` survived into the summary as visible markup.
 
 ## Caching and Incrementality
 

@@ -102,9 +102,17 @@ The default command expects `miniserve` to be installed. You can replace it with
 rss = false
 ```
 
-- `rss`: when true, `wanshi build` writes `feed.xml`.
+- `rss`: when true, `wanshi build` writes `feed.xml` and every page gains a
+  `<link rel="alternate">` pointing at it, so readers discover the feed
+  automatically.
 
-RSS publishing requires `[wanshi].base-url` to be an absolute `http://` or `https://` URL with a host.
+RSS publishing requires `[wanshi].base-url` to be an absolute `http://` or
+`https://` URL with a host — a relative one is rejected before the feed is
+written. Feeds are publish-only: `wanshi serve` writes none and its pages do not
+advertise one.
+
+See [Publishing a Feed](publishing-and-workflows.md#publishing-a-feed) for what
+ends up in the feed and how dates are handled.
 
 ## Search
 

@@ -100,7 +100,7 @@ available.
 | `references` | bool | `true` | Whether referenced sections appear in this section's footer. |
 | `asref` | bool | `[build].asref` | Whether this section is treated as a reference when linked to. |
 | `asback` | bool | `true` | Whether this section's outbound links generate backlinks on their targets. |
-| `collect` | bool | `false` | Marks the page as a collection page; excludes it from RSS items. |
+| `collect` | bool | `false` | Marks the page as a listing page rather than a post: embedded children keep their metadata visible, and the page is excluded from the [RSS feed](publishing-and-workflows.md#what-goes-in-the-feed). |
 | `footer-mode` | `embed` \| `link` | `[build].footer-mode` | Footer rendering for this section. |
 | `footer-sort-by` | metadata key | `[build].footer-sort-by` | Sort key for this section's footer entries. |
 

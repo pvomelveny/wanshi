@@ -43,15 +43,68 @@ If your host serves the site under a subpath, configure:
 base-url = "/subpath/"
 ```
 
-If you enable RSS, use an absolute base URL:
+## Publishing a Feed
+
+Two settings turn on an RSS feed:
 
 ```toml
 [wanshi]
-base-url = "https://example.com/"
+base-url = "https://example.com/"   # must be absolute
 
 [publish]
 rss = true
 ```
+
+`base-url` has to be an absolute `http://` or `https://` URL with a host,
+because a feed is read away from your site and every link in it must stand on
+its own. A relative base URL is rejected before the feed is written, with a
+message naming the setting — this is the most common way to get RSS wrong.
+
+`wanshi build` then writes `feed.xml` beside your pages, and every page links to
+it, so browsers and feed readers discover it automatically. Nothing else is
+needed. Feeds are a publish-time artifact: `wanshi serve` does not write one, and
+preview pages correctly do not advertise one.
+
+### What Goes in the Feed
+
+Every visible section becomes an item, except:
+
+- the root `index` page, and
+- anything marked `"collect": "true"`, which is the switch for "this is a
+  listing page, not a post".
+
+Items are newest first by `date`, falling back to slug order. The channel title
+comes from your `index` page's title.
+
+### Dates
+
+`date` metadata becomes the item's `pubDate`, converted to the RFC 822 format
+feeds require. `2026-08-06`, `10/12/2025`, and `October 12, 2025` all work.
+
+A note with **no `date` gets no `pubDate`**. That is valid, but readers vary in
+how they order such items, and they sort last in the feed. If you care about feed
+ordering, set `date` on everything.
+
+### Notes Defined Inside Other Notes
+
+A named subtree is a section with its own page, so it also becomes its own feed
+item — and its content appears again inside its parent note's item. A note
+containing five `#definition(slug: ...)` blocks therefore produces six items.
+
+If that is more granular than you want, either leave subtrees anonymous (drop
+`slug:`, and they stay part of the parent) or mark the container `collect`.
+
+### Checking the Result
+
+`feed.xml` is plain XML; a quick look confirms the shape:
+
+```sh
+wanshi build
+head -20 publish/feed.xml
+```
+
+Worth checking after your first build: that `<link>` values are absolute and
+point at your real domain, and that `<pubDate>` values look right.
 
 ## Pretty URLs
 
