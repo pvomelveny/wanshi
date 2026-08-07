@@ -12,6 +12,7 @@ mod environment;
 mod footer_sort;
 mod html_flake;
 mod html_macro;
+mod html_text;
 mod ordered_map;
 mod path_utils;
 mod recorder;

@@ -112,73 +112,8 @@ fn own_text(section: &Section) -> String {
     text
 }
 
-/// Elements whose *contents* are markup rather than prose. Typst renders inline
-/// math and diagrams as inline `<svg>`, so without this the index fills up with
-/// coordinates, colours and namespace URLs — noise that inflates the artifact
-/// and makes unrelated notes match a search for "align".
-const NON_TEXT_ELEMENTS: [&str; 3] = ["svg", "style", "script"];
-
 fn strip_html(html: &str) -> String {
-    let mut text = html.to_string();
-    for name in NON_TEXT_ELEMENTS {
-        text = remove_element(&text, name);
-    }
-    let text = strip_tags(&text);
-    htmlize::unescape(&text).into_owned()
-}
-
-/// Drop `<name ...> … </name>` regions, contents included.
-///
-/// Written as a scan rather than a regex because the general tag regex used for
-/// display cannot match attribute names containing a colon (`xmlns:xlink`),
-/// which is exactly what Typst's SVG output emits.
-fn remove_element(html: &str, name: &str) -> String {
-    let open = format!("<{name}");
-    let close = format!("</{name}>");
-    let mut out = String::with_capacity(html.len());
-    let mut rest = html;
-
-    while let Some(start) = rest.find(&open) {
-        // Require a tag boundary so `<svgfoo` is not treated as `<svg`.
-        let after = rest[start + open.len()..].chars().next();
-        if !matches!(after, Some(c) if c.is_whitespace() || c == '>' || c == '/') {
-            let cut = start + open.len();
-            out.push_str(&rest[..cut]);
-            rest = &rest[cut..];
-            continue;
-        }
-
-        out.push_str(&rest[..start]);
-        // Leave a separator so neighbouring words do not fuse into one token.
-        out.push(' ');
-        rest = match rest[start..].find(&close) {
-            Some(end) => &rest[start + end + close.len()..],
-            // Unclosed: drop the remainder rather than index markup.
-            None => "",
-        };
-    }
-
-    out.push_str(rest);
-    out
-}
-
-/// Remove every remaining tag. A literal `<` in text is always escaped in the
-/// generated HTML, so an unescaped `<` reliably starts a tag.
-fn strip_tags(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let mut depth = 0usize;
-    for ch in html.chars() {
-        match ch {
-            '<' => {
-                depth += 1;
-                out.push(' ');
-            }
-            '>' if depth > 0 => depth -= 1,
-            _ if depth == 0 => out.push(ch),
-            _ => {}
-        }
-    }
-    out
+    crate::html_text::to_plain_text(html, &crate::html_text::NON_TEXT_ELEMENTS)
 }
 
 /// Taxons are stored for display as `"Definition. "`; results show them bare.

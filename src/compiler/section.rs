@@ -162,8 +162,12 @@ impl HTMLContent {
 
     pub fn remove_all_tags(&self) -> String {
         static RE_TAGS: LazyLock<Regex> = LazyLock::new(|| {
+            // Tag names may contain digits — `h1`..`h6` above all. Matching only
+            // letters left every heading in place, which surfaced as literal
+            // `<h1>` text in RSS summaries.
+            let name = r#"[A-Za-z][A-Za-z0-9]*"#;
             let attrs = r#"(\s+[a-zA-Z-]+(="([^"\\]|\\[\s\S])*")?)*"#;
-            Regex::new(&format!(r#"<[A-Za-z]+{}\s*/?>|</[A-Za-z]+>"#, attrs)).unwrap()
+            Regex::new(&format!(r#"<{name}{attrs}\s*/?>|</{name}>"#)).unwrap()
         });
 
         let remove_tag = |s| {
@@ -205,6 +209,26 @@ impl HTMLContent {
                 str
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod html_content_tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_all_tags_strips_tag_names_containing_digits() {
+        let text = HTMLContent::Plain("<h1>Heading</h1><p>Body</p>".to_string()).remove_all_tags();
+        assert_eq!(text, "HeadingBody");
+    }
+
+    #[test]
+    fn test_remove_all_tags_strips_tags_with_attributes() {
+        let text = HTMLContent::Plain(
+            r#"<h2 class="taxon">A</h2><a href="/x" title="y">B</a>"#.to_string(),
+        )
+        .remove_all_tags();
+        assert_eq!(text, "AB");
     }
 }
 

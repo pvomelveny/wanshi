@@ -134,18 +134,24 @@ fn collect_items(state: &CompileState) -> eyre::Result<Vec<FeedItem>> {
     Ok(items)
 }
 
+/// A plain-text summary of a section, for `<description>`.
+///
+/// `<header>` is dropped along with the usual markup-only elements: it holds the
+/// taxon, title, slug and date, which a reader already sees as the item's own
+/// title and pubDate. Without this a summary opens with
+/// "Remark. Alice [notes/alice] 2026-03-01" before reaching any prose.
+///
+/// Entities are unescaped here because the result is escaped again on its way
+/// into XML; skipping that showed readers a literal `&amp;`.
 fn summary_text_from_html(content_html: &str) -> String {
-    let text = strip_html_tags(content_html);
-    let collapsed = collapse_whitespace(&text);
+    let dropped: Vec<&str> = crate::html_text::NON_TEXT_ELEMENTS
+        .iter()
+        .copied()
+        .chain(std::iter::once("header"))
+        .collect();
+    let text = crate::html_text::to_plain_text(content_html, &dropped);
+    let collapsed = crate::html_text::collapse_whitespace(&text);
     truncate_to_max_chars(collapsed.trim(), DESCRIPTION_MAX_CHARS)
-}
-
-fn strip_html_tags(value: &str) -> String {
-    crate::compiler::section::HTMLContent::Plain(value.to_string()).remove_all_tags()
-}
-
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn truncate_to_max_chars(value: &str, max_chars: usize) -> String {
