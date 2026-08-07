@@ -61,8 +61,10 @@ pub fn graph_path(output_dir: &Utf8Path) -> Utf8PathBuf {
     output_dir.join("wanshi.graph.json")
 }
 
+pub const FEED_NAME: &str = "feed.xml";
+
 pub fn feed_path(output_dir: &Utf8Path) -> Utf8PathBuf {
-    output_dir.join("feed.xml")
+    output_dir.join(FEED_NAME)
 }
 
 pub const SEARCH_INDEX_NAME: &str = "wanshi.search.json";

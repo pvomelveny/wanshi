@@ -26,7 +26,7 @@ pub use config_access::{
     inline_css, inline_script, is_short_slug, is_toc_left, is_toc_mobile_sticky, is_toc_sticky,
     output_dir, publish_rss, reload_marker_path, search_content_enabled, search_enabled,
     search_index_path, serve_command, theme_lock, theme_paths, toc_max_width, trees_dir,
-    trees_dir_without_root, typst_root_dir, SEARCH_INDEX_NAME,
+    trees_dir_without_root, typst_root_dir, FEED_NAME, SEARCH_INDEX_NAME,
 };
 pub use hashing::{verify_and_file_hash, verify_update_hash};
 pub use imports::{import_fonts_html, import_math_html, import_meta_html, import_style_html};

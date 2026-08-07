@@ -33,6 +33,7 @@ pub fn html_doc(
 <meta name="viewport" content="width=device-width">"#
             (format!("<title>{page_title}</title>"))
             (format!(r#"<link rel="icon" href="{}assets/favicon.ico" />"#, base_url))
+            (html_feed_link())
             (html_import_meta())
             (html_scripts())
             (html_live_reload())
@@ -174,6 +175,28 @@ pub fn html_nav(toc_class: Vec<&str>, catalog_html: &str) -> String {
     html!(nav id="toc" class={toc_class.join(" ")} {
         (html_themes()) (html_search()) (catalog_html)
     })
+}
+
+/// Feed autodiscovery link.
+///
+/// Without this the feed is published but unreachable: browsers and readers
+/// find a feed by looking for `rel="alternate"` in the page head, and nothing
+/// else on the site points at `feed.xml`.
+///
+/// Only emitted in publish builds, matching where the feed is actually written.
+/// The `title` attribute is omitted deliberately: it is optional, only useful
+/// when a site publishes several feeds, and any value chosen here could
+/// contradict the channel title, which is derived from the index page.
+fn html_feed_link() -> String {
+    if !environment::publish_rss() || !environment::is_publish() {
+        return String::new();
+    }
+
+    let href = environment::full_url(environment::FEED_NAME);
+    format!(
+        r#"<link rel="alternate" type="application/rss+xml" href="{}" />"#,
+        htmlize::escape_attribute(&href),
+    )
 }
 
 /// Search affordance in the sidebar.
