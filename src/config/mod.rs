@@ -1,0 +1,128 @@
+// Copyright (c) 2025 Kodama Project. All rights reserved.
+// Released under the GPL-3.0 license as described in the file LICENSE.
+// Authors: Kokic (@kokic), Spore (@s-cerevisiae)
+
+pub mod build;
+pub mod publish;
+pub mod serve;
+pub mod text;
+pub mod toc;
+pub mod wanshi;
+
+use build::Build;
+use camino::Utf8PathBuf;
+use publish::Publish;
+use serde::{Deserialize, Serialize};
+use serve::Serve;
+use text::Text;
+use toc::Toc;
+use wanshi::Wanshi;
+
+pub const DEFAULT_CONFIG_PATH: &str = "./Wanshi.toml";
+
+#[derive(Deserialize, Debug, Default, Serialize)]
+pub struct Config {
+    #[serde(default)]
+    pub wanshi: Wanshi,
+
+    #[serde(default)]
+    pub toc: Toc,
+
+    #[serde(default)]
+    pub text: Text,
+
+    #[serde(default)]
+    pub build: Build,
+
+    #[serde(default)]
+    pub serve: Serve,
+
+    #[serde(default)]
+    pub publish: Publish,
+}
+
+/// Try to find toml file in the current directory or the parent directory.
+pub fn find_config(mut toml_file: Utf8PathBuf) -> eyre::Result<Utf8PathBuf> {
+    if !toml_file.exists() {
+        let parent = toml_file
+            .parent()
+            .ok_or_else(|| eyre::eyre!("cannot resolve parent directory of `{}`", toml_file))?
+            .canonicalize_utf8()?;
+        let parent = parent.parent().ok_or_else(|| {
+            eyre::eyre!(
+                "cannot find configuration file from root directory while searching from `{}`",
+                toml_file
+            )
+        })?;
+
+        toml_file = parent.join(DEFAULT_CONFIG_PATH);
+        if !toml_file.exists() {
+            return Err(eyre::eyre!("cannot find configuration file: {}", toml_file));
+        }
+    }
+    Ok(toml_file)
+}
+
+pub fn parse_config(config: &str) -> eyre::Result<Config> {
+    let config: Config =
+        toml::from_str(config).map_err(|e| eyre::eyre!("failed to parse config file: {}", e))?;
+    Ok(config)
+}
+
+mod test {
+
+    #[test]
+    fn test_empty_toml() {
+        let serve = crate::config::Serve::default();
+        let config = crate::config::parse_config("").unwrap();
+
+        assert_eq!(config.wanshi.trees, "trees");
+        assert_eq!(config.wanshi.assets, "assets");
+        assert_eq!(config.wanshi.base_url, "/");
+        assert!(config.wanshi.theme_lock);
+        assert!(!config.build.short_slug);
+        assert!(!config.build.pretty_urls);
+        assert!(!config.build.inline_css);
+        assert!(!config.build.inline_script);
+        assert_eq!(config.build.footer_sort_by, "slug");
+        assert_eq!(config.serve.edit, serve.edit);
+        assert_eq!(config.serve.output, serve.output);
+        assert!(!config.publish.rss);
+    }
+
+    #[test]
+    fn test_simple_toml() {
+        let serve = crate::config::Serve::default();
+        let config = crate::config::parse_config(
+            r#"
+            [wanshi]
+            trees = "source"
+            assets = "assets"
+            base-url = "https://example.com/"
+            theme-lock = true
+
+            [build]
+            short-slug = true
+            inline-css = true
+            inline-script = true
+            footer-sort-by = "title"
+
+            [publish]
+            rss = true
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.wanshi.trees, "source");
+        assert_eq!(config.wanshi.assets, "assets");
+        assert_eq!(config.wanshi.base_url, "https://example.com/");
+        assert!(config.wanshi.theme_lock);
+        assert!(config.build.short_slug);
+        assert!(config.build.inline_css);
+        assert!(config.build.inline_script);
+        assert_eq!(config.build.footer_sort_by, "title");
+        assert_eq!(config.serve.edit, serve.edit);
+        assert_eq!(config.serve.output, serve.output);
+        assert!(config.publish.rss);
+    }
+}

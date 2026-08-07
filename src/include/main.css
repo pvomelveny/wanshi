@@ -1,0 +1,780 @@
+html {
+  font-size: 16px;
+}
+
+:root body {
+  color-scheme: light;
+
+  /* Palette: "Parchment & walnut" */
+  --bg: #F7F2E7;
+  --surface: #EDE4CE;
+  --border: #BFA882;
+  --muted: #6B5744;
+  --ink: #2E1F14;
+  --accent: #822727;
+  --accent-hover: #6B1F1F;
+
+  --content-gap: 15px;
+  --radius: 5px;
+  --article-max-width: 90ex;
+  --toc-max-width: 90ex;
+  --heading-font-family: "Playfair Display", serif;
+  --text-font-family: "Source Serif 4", serif;
+  --mono-font-family: "Fira Code", "JetBrains Mono", monospace;
+
+  /* root font size: 16px */
+  --pre-font-size: 0.95rem;
+  --code-font-size: 0.9rem;
+  --katex-font-size: 1em;
+  --katex-frac-line-font-size: 1.25em;
+  --details-h1-font-size: 1.2rem;
+  /* 13pt */
+  --section-details-h1-font-size: 1.083rem;
+  --article-details-h1-font-size: 1.5rem;
+  /* 0.9em */
+  --article-details-h1-taxon-font-size: 1.35rem;
+  /* 24px; */
+  --logo-font-size: 1.5rem;
+  /* 14pt; */
+  --footer-h2-font-size: 1.167rem;
+  --p-line-height: 1.75;
+
+  --text-color: var(--ink);
+  --toc-link-color: var(--muted);
+  --background-color: var(--bg);
+
+  --background-color-pre: var(--surface);
+  --background-color-code: var(--surface);
+
+  --hover-color-block: rgba(130, 39, 39, 0.05);
+  --hover-color-link: rgba(130, 39, 39, 0.12);
+
+  --link-color: var(--accent);
+  --slug-color: var(--muted);
+  --logo-color: var(--muted);
+  --logo-hover-color: var(--accent);
+  --span-taxon-color: var(--muted);
+  --article-taxon-color: var(--muted);
+  --mark-color: #EBD9A8;
+  --em-color: var(--accent);
+}
+
+@media print {
+  html {
+    font-size: 16px;
+  }
+
+  :root body {
+    --background-color: white;
+    --background-color-pre: white;
+    --background-color-code: white;
+  }
+
+  .edit,
+  #theme-options {
+    display: none;
+  }
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+theme-option {
+  display: inline-block;
+}
+
+theme-option>input {
+  display: none;
+}
+
+theme-option>label {
+  color: var(--slug-color);
+}
+
+theme-option>label:hover {
+  background-color: var(--hover-color-link);
+}
+
+theme-option:has(input:checked)>label {
+  color: var(--link-color);
+}
+
+theme-option>label::before {
+  content: "[";
+  color: rgba(0, 0, 0, 0);
+}
+
+theme-option>label::after {
+  content: "]";
+  color: rgba(0, 0, 0, 0);
+}
+
+theme-option:has(input:checked)>label::before {
+  color: var(--link-color);
+}
+
+theme-option:has(input:checked)>label::after {
+  color: var(--link-color);
+}
+
+#theme-options:not(:empty)::before {
+  content: "(";
+}
+
+#theme-options:not(:empty)::after {
+  content: ")";
+}
+
+body {
+  color: var(--text-color);
+  font-optical-sizing: auto;
+  font-size: 1rem;
+  font-weight: 300;
+  font-family: var(--text-font-family);
+  hyphens: auto;
+  background-color: var(--background-color);
+}
+
+pre,
+code {
+  font-optical-sizing: auto;
+}
+
+p,
+pre {
+  line-height: var(--p-line-height);
+}
+
+pre {
+  border-radius: var(--radius);
+  background-color: var(--background-color-pre);
+  padding: 0.5rem;
+  font-size: var(--pre-font-size);
+  margin-top: 0rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+code {
+  border-radius: var(--radius);
+  background-color: var(--background-color-code);
+  padding: 0.1rem;
+  font-size: var(--code-font-size);
+}
+
+pre,
+code {
+  font-family: var(--mono-font-family);
+}
+
+table {
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-collapse: separate;
+  border-spacing: 0 5px;
+}
+
+/* !forest */
+th {
+  font-weight: normal;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 0 15px;
+  vertical-align: top;
+}
+
+/* !forest */
+pre>code {
+  border-radius: 0;
+  background-color: transparent;
+  padding: 0;
+}
+
+.katex {
+  font: normal var(--katex-font-size) KaTeX_Main, "Source Serif 4", serif;
+  line-height: 1rem;
+  text-indent: 0;
+  text-rendering: auto;
+}
+
+.katex .mfrac .frac-line {
+  font-size: var(--katex-frac-line-font-size);
+}
+
+p:has(span.katex-html:empty) {
+  display: none;
+}
+
+section+p:empty {
+  display: none;
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display .katex {
+  /* Inconsistent bounding box at different font sizes. */
+  /* Also see: https://github.com/KaTeX/KaTeX/issues/3965 */
+  padding-top: 1px;
+}
+
+.display-none {
+  display: none;
+}
+
+em {
+  color: var(--em-color);
+  font-style: italic;
+}
+
+blockquote {
+  font-style: italic;
+  margin: 0.5rem 0.5rem;
+  padding: 0 0.75rem;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin-top: 0.5em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--heading-font-family);
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+h5,
+h6,
+p {
+  margin-top: 0;
+}
+
+details>summary {
+  list-style-type: none;
+  outline: none;
+  cursor: pointer;
+}
+
+details>summary::before {
+  content: "\25B8";
+  /* ▸ */
+  display: inline-block;
+  width: 0.9em;
+  font-size: 0.75em;
+  color: var(--muted);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+details[open]>summary::before {
+  transform: rotate(90deg);
+}
+
+details>summary:hover::before {
+  color: var(--accent);
+}
+
+details>summary>header {
+  display: inline;
+}
+
+details>summary::marker,
+details>summary::-webkit-details-marker {
+  display: none;
+}
+
+details h1 {
+  font-size: var(--details-h1-font-size);
+  display: inline;
+}
+
+span.taxon {
+  display: inline;
+  color: var(--span-taxon-color);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72em;
+  background-color: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.05em 0.5em;
+  margin-right: 0.5em;
+}
+
+.title {
+  font-family: var(--heading-font-family);
+  font-style: italic;
+}
+
+article>section>details>summary>header>h1 {
+  font-size: var(--article-details-h1-font-size);
+}
+
+article>section>details>h2 {
+  font-size: 1.25rem;
+}
+
+article>section>details>h3 {
+  font-size: 1.125rem;
+}
+
+article>section>details>h4 {
+  font-size: 1rem;
+}
+
+article>section>details>h5,
+article>section>details>h6 {
+  font-size: 0.875rem;
+}
+
+article>section>details>summary>header {
+  display: block;
+  margin-bottom: 0.5em;
+}
+
+article>section>details>summary>header>h1>.taxon {
+  display: inline-block;
+  font-size: var(--article-details-h1-taxon-font-size);
+  color: var(--article-taxon-color);
+  padding-bottom: 5pt;
+}
+
+article>section>details>summary>header>h1>.taxon:empty {
+  display: none;
+}
+
+section.block>details {
+  margin-bottom: 0.4em;
+}
+
+section.block>details[open] {
+  margin-bottom: 1em;
+}
+
+section.block.link-list>details {
+  margin-bottom: 0em;
+}
+
+section.block.link-list>details>section.block>details {
+  margin-bottom: 0.25em;
+}
+
+.block {
+  padding-left: 5px;
+  padding-right: 10px;
+  padding-bottom: 2px;
+  border-radius: var(--radius);
+}
+
+.block:hover {
+  background-color: var(--hover-color-block);
+}
+
+.block.hide-metadata>details>summary>header>.metadata,
+.block.hide-metadata>details>summary>header>.metadata-row {
+  display: none;
+}
+
+img {
+  object-fit: cover;
+  max-width: 100%;
+}
+
+figure {
+  text-align: center;
+}
+
+figcaption {
+  font-style: italic;
+  padding: 3px;
+  color: var(--muted);
+}
+
+mark {
+  background-color: var(--mark-color);
+  color: var(--ink);
+}
+
+hr {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  background-color: var(--border);
+  border: 0 none;
+  width: 100%;
+  height: 1px;
+}
+
+ul,
+ol {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+.logo>span {
+  color: var(--logo-color);
+  text-decoration: none;
+  font-family: var(--heading-font-family);
+  font-style: italic;
+  font-weight: 600;
+}
+
+.logo>span:hover {
+  color: var(--logo-hover-color);
+}
+
+.logo {
+  font-size: var(--logo-font-size);
+}
+
+section section[data-taxon="Reference"]>details>summary>header>h1>.taxon,
+section section[data-taxon="Person"]>details>summary>header>h1>.taxon {
+  display: none;
+}
+
+section .block[data-taxon]>header>h1,
+section .block[data-taxon] details>summary>header>h1 {
+  font-size: var(--section-details-h1-font-size);
+}
+
+footer>section {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+footer h2 {
+  font-family: var(--heading-font-family);
+  font-weight: 600;
+  font-size: var(--footer-h2-font-size);
+}
+
+.metadata-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.1em;
+}
+
+.metadata-row>.date {
+  flex: 0 0 auto;
+  min-width: 5em;
+  color: var(--muted);
+  font-family: var(--mono-font-family);
+  font-size: 0.8rem;
+}
+
+.metadata-row>.metadata {
+  flex: 1 1 auto;
+}
+
+.metadata ul {
+  padding-left: 0;
+  display: inline;
+}
+
+.metadata li::after {
+  content: " \00b7 ";
+}
+
+.metadata li:last-child::after {
+  content: "";
+}
+
+.metadata * {
+  display: inline;
+}
+
+.link {
+  cursor: pointer;
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+a.slug:hover,
+a.edit:hover,
+a.hash:hover,
+a.bullet:hover,
+.link:hover {
+  background-color: var(--hover-color-link);
+}
+
+.link.external,
+.link.asset {
+  text-decoration: underline;
+}
+
+.link.asset::before {
+  content: "[F] ";
+  /* file */
+}
+
+a.link.local,
+.link.local a,
+a.slug,
+a.edit,
+a.hash {
+  box-shadow: none;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  overflow-wrap: break-word;
+}
+
+.slug,
+.edit,
+.doi,
+.orcid {
+  color: var(--slug-color);
+  font-weight: 300;
+}
+
+body>header {
+  margin-bottom: 0.5em;
+}
+
+#grid-wrapper>article {
+  max-width: var(--article-max-width);
+  margin-right: auto;
+  grid-area: article;
+}
+
+@media only screen and (max-width: 1000px) {
+  :root body {
+    --code-font-size: 0.85rem;
+  }
+
+  figure {
+    margin: 0rem;
+  }
+
+  .block {
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-bottom: 2px;
+    border-radius: 5px;
+  }
+
+  #grid-wrapper>nav {
+    transition: ease all 0.2s;
+  }
+
+  .mobile-sticky-nav {
+    position: sticky;
+    top: 0px;
+    max-height: calc(100vh - 0px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+
+    background-color: var(--background-color);
+    z-index: 7;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@media only screen and (min-width: 1000px) {
+  body {
+    margin-top: 2rem;
+    margin-left: 2rem;
+    transition: ease all 0.2s;
+  }
+
+  #grid-wrapper {
+    display: grid;
+    grid-auto-flow: column;
+  }
+
+  .sticky-nav {
+    position: sticky;
+    top: 0px;
+    max-height: calc(100vh - 0px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+nav#toc li.item-summary li {
+  display: none;
+}
+
+nav#toc ul {
+  list-style-type: none;
+}
+
+nav#toc li>ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+nav#toc,
+nav#toc a {
+  color: var(--toc-link-color);
+}
+
+nav#toc {
+  grid-area: toc;
+}
+
+nav {
+  font-optical-sizing: auto;
+}
+
+nav#toc a.bullet {
+  opacity: 0.7;
+  margin-left: 0.4rem;
+  margin-right: 0.3rem;
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+  text-decoration: none;
+}
+
+li.entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.6rem;
+}
+
+li.entry>.date {
+  order: 1;
+  margin-left: auto;
+  padding-left: 0.6rem;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--mono-font-family);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+li.entry>ul {
+  order: 2;
+  flex-basis: 100%;
+}
+
+/* typst html figure */
+figure:has(.typst-frame) {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* typst html math block */
+.typst-block {
+  text-align: center;
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+figure.typst-block>img {
+  max-width: none;
+}
+
+.typst-text use[fill="#000000"],
+.typst-group use[fill="#000000"],
+path.typst-shape[fill="#000000"] {
+  fill: var(--text-color);
+}
+
+path.typst-shape[stroke="#000000"] {
+  stroke: var(--text-color);
+}
+
+/* Resolved #query(...) listings. Rows reuse the `entry` treatment from the
+   table of contents, so the date column and bullet match the rest of the site. */
+.block.query {
+  margin: 1.2em 0;
+  padding-left: 0;
+}
+
+.block.query:hover {
+  background-color: transparent;
+}
+
+.block.query>h1.query-title {
+  font-family: var(--heading-font-family);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 0.3em 0;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--border);
+}
+
+.block.query>ul.block {
+  list-style-type: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.block.query>ul.block:empty::after {
+  content: "(nothing yet)";
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Sidebar search. Results reuse the `entry` rows that style the table of
+   contents, so a result reads the same as a catalog line. */
+#search {
+  margin-bottom: 0.6em;
+}
+
+#search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.3em 0.5em;
+  font-family: var(--serif-font-family, inherit);
+  font-size: 0.85rem;
+  color: var(--ink);
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+#search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#search-input::placeholder {
+  color: var(--muted);
+}
+
+#search-results ul.block {
+  list-style-type: none;
+  margin: 0.4em 0 0 0;
+  padding-left: 0;
+}
+
+#search-results .search-empty {
+  margin: 0.4em 0 0 0;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}

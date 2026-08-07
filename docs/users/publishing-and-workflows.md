@@ -1,0 +1,176 @@
+# Publishing and Maintenance Workflows
+
+## Recommended Authoring Loop
+
+1. Run `wanshi serve` and leave it running while you write.
+2. Create or edit `.typ` sections under the source tree — see [Writing Notes](writing-notes.md).
+3. Run `wanshi check --strict` before publishing.
+4. Run `wanshi build` for the final output.
+5. Deploy the configured publish output directory.
+
+This page covers steps 3–5. The authoring side of the loop is documented in
+[Writing Notes](writing-notes.md) and [Links and References](links-and-references.md).
+
+## Continuous Integration
+
+`wanshi check --strict` exits non-zero on any warning, which makes it a suitable
+gate. A minimal pipeline:
+
+```sh
+wanshi check --strict
+wanshi build
+```
+
+Both commands need `typst` on `PATH`. Neither needs a server, so `miniserve` is
+not a CI dependency.
+
+## Static Hosting
+
+wanshi output is static HTML, CSS, JavaScript, assets, and optional JSON/XML artifacts. Any static hosting provider can serve it.
+
+Use:
+
+```sh
+wanshi build
+```
+
+Then publish the configured `[build].output` directory.
+
+If your host serves the site under a subpath, configure:
+
+```toml
+[wanshi]
+base-url = "/subpath/"
+```
+
+If you enable RSS, use an absolute base URL:
+
+```toml
+[wanshi]
+base-url = "https://example.com/"
+
+[publish]
+rss = true
+```
+
+## Pretty URLs
+
+Enable pretty URLs when your host maps extensionless paths to generated HTML pages:
+
+```toml
+[build]
+pretty-urls = true
+```
+
+For local preview, make sure the configured static server command supports the same URL style.
+
+## Cache and Incremental Builds
+
+wanshi maintains cache data under `.cache`. Normal builds reuse caches and hash checks to avoid unnecessary work.
+
+Deleting a note also deletes its published page: each build reconciles the output directory against the notes that currently exist, removing pages whose sources are gone and pruning directories left empty. Only files wanshi generated are ever removed, so anything else you keep in the publish directory — a `CNAME`, a hand-written `404.html`, the copied assets tree — is left alone.
+
+Use:
+
+```sh
+wanshi build --no-cache
+```
+
+when investigating stale output or after making broad environment changes.
+
+Serve mode also keeps an in-memory compile session and uses watcher dirty-path batches to avoid full rebuilds where possible.
+
+## Upgrading Existing Sites
+
+After installing a newer wanshi release, run:
+
+```sh
+wanshi upgrade
+```
+
+This rewrites the configuration into the current shape and syncs the bundled Typst library. To inspect a config upgrade first:
+
+```sh
+wanshi upgrade config --output Wanshi.upgraded.toml
+```
+
+To sync only the Typst library:
+
+```sh
+wanshi upgrade typst-lib
+```
+
+### Moving to the `.typ` Extension
+
+Notes used to be `.typst`; new sites now use Typst's standard `.typ`, which is
+what editors and language servers recognise without extra configuration. Both are
+accepted, so **existing sites keep working untouched** and you can migrate at
+your own pace, or not at all.
+
+The migration is URL-safe: a slug is the source path *minus* the extension, so
+renaming changes no slug, no page URL, no link, and no backlink. Link and embed
+targets that spell out the old extension — `#embed("./alice.typst")` — keep
+resolving too, since any recognised source extension is stripped from a target.
+
+```sh
+find trees -name '*.typst' -exec sh -c 'mv "$1" "${1%.typst}.typ"' _ {} \;
+wanshi check --strict
+```
+
+One thing to know before you rename: `.typ` files are now notes, so any Typst
+file in the tree that is *not* a note — shared macros, a reusable figure — must
+be given a `_` prefix or moved into a `_`-prefixed directory, or it will turn
+into a page. See [Helpers: the `_` Prefix](content-authoring.md#helpers-the-_-prefix).
+
+### The Bundled Library
+
+`trees/_lib/wanshi.typ` is a **copy** of the library that was current when the
+site was scaffolded, not a live reference into the binary. New helpers added by a
+wanshi release will not exist in your project until you run this. If you have
+edited that file locally, diff before syncing — the upgrade overwrites it.
+
+## Editor Integration
+
+Generate VS Code snippets:
+
+```sh
+wanshi snip --katex
+```
+
+Configure edit links separately for publish and serve workflows:
+
+```toml
+[build]
+edit = "https://example.com/edit/"
+
+[serve]
+edit = "vscode://file/"
+```
+
+Each section header then carries an `[edit]` link. For VS Code-family prefixes
+(`vscode://file/`, `vscode-insiders://file/`, `vsc://file/`, `vscodium://file/`)
+wanshi appends the source line and column, so the link opens at the right place
+in the file. `[build].edit` is unset by default, which means published pages
+carry no edit link.
+
+For tooling that drives wanshi itself, `wanshi serve --no-server --print-json`
+emits line-delimited JSON build events; see the
+[command reference](commands.md#editor-integration-events).
+
+## Troubleshooting
+
+Run `wanshi check` when a build fails or generated links look wrong. It catches many graph and content issues before writing output.
+
+Common issues:
+
+- **Missing `index` section**: add `trees/index.typ`.
+- **Dangling local link**: fix the target path or create the target section. The warning names the slug the link resolved to, which is usually enough to spot a relative-vs-absolute mistake — see [Links and References](links-and-references.md#slugs-are-the-address-space).
+- **Cyclic embed**: the error prints the whole chain. Convert one embed in the cycle into a `local()` link.
+- **Missing embed target**: unlike a dangling link, this fails the build. Create the target or remove the embed.
+- **Duplicate slug**: two source files resolve to the same slug. Rename one.
+- **Typst render error**: verify Typst is installed and that the source compiles on its own with `typst compile --root trees trees/<note>.typ`. If the failure is a "file not found" on the library import, the note is probably using the tree-relative `#import "_lib/wanshi.typ"`, which only resolves at the top of the tree; use the root-absolute `#import "/_lib/wanshi.typ"` instead. See [Import Paths](writing-notes.md#import-paths).
+- **A helper turned into a page**: prefix the file or its directory with `_`. See [Helpers: the `_` Prefix](content-authoring.md#helpers-the-_-prefix).
+- **RSS base URL error**: set `[wanshi].base-url` to an absolute `http://` or `https://` URL with a host.
+- **`miniserve` not found**: install it, point `[serve].command` at another static server, or use `wanshi serve --no-server` and serve the output directory yourself.
+- **CSS or fonts look wrong after an edit**: `main.css`, `main.js`, and `wanshi.typ` are compiled into the binary. Editing the copies in a built site works for that site, but changing wanshi's own bundled versions requires rebuilding the binary. To customize a site without rebuilding, use `import-style.html` — see [Customizing the Page Head](configuration.md#customizing-the-page-head).
+- **Stale output**: run `wanshi build --no-cache`. Note that pages for deleted notes are removed automatically on every build, so this is only needed for genuinely stale *content*.
