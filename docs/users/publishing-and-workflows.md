@@ -69,9 +69,11 @@ preview pages correctly do not advertise one.
 
 Every visible section becomes an item, except:
 
-- the root `index` page, and
+- the root `index` page,
 - anything marked `"collect": "true"`, which is the switch for "this is a
-  listing page, not a post".
+  listing page, not a post", and
+- subtrees whose source note is itself in the feed, since their content already
+  appears there — see [below](#notes-defined-inside-other-notes).
 
 Items are newest first by `date`, falling back to slug order. The channel title
 comes from your `index` page's title.
@@ -87,12 +89,35 @@ ordering, set `date` on everything.
 
 ### Notes Defined Inside Other Notes
 
-A named subtree is a section with its own page, so it also becomes its own feed
-item — and its content appears again inside its parent note's item. A note
-containing five `#definition(slug: ...)` blocks therefore produces six items.
+A named subtree has its own page, but its content is also rendered inside the
+note that declared it. Listing both would hand a subscriber the same text twice,
+so **a subtree is a feed item only when its source note is not**.
 
-If that is more granular than you want, either leave subtrees anonymous (drop
-`slug:`, and they stay part of the parent) or mark the container `collect`.
+That gives you a choice per file, using `collect`:
+
+```typst
+// One post. The definitions are part of it, and the feed gets one item.
+#metadata(( "title": "Notes on monoids", "date": "2026-05-02" ))
+
+#definition(slug: "monoid", title: "Monoid")[...]
+#theorem(slug: "free-monoid", title: "Free monoid")[...]
+```
+
+```typst
+// A container of notes. The file itself is not a post, so the feed carries
+// the notes inside it instead.
+#metadata(( "title": "Algebra", "date": "2026-05-02", "collect": "true" ))
+
+#definition(slug: "monoid", title: "Monoid")[...]
+#theorem(slug: "free-monoid", title: "Free monoid")[...]
+```
+
+The first yields one item; the second yields two. Subtrees that do appear
+inherit their source's `date`, so they sort with the note they were written in
+rather than falling to the end of the feed.
+
+Anonymous subtrees — those written without `slug:` — are never feed items, since
+they have no page of their own.
 
 ### Checking the Result
 

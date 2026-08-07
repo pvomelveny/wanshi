@@ -2,12 +2,18 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic)
 
+use std::collections::HashSet;
+
 use eyre::eyre;
 use url::Url;
 
-use crate::{entry::MetaData, environment, slug::Slug};
+use crate::{
+    entry::{MetaData, KEY_DATE, KEY_SOURCE_SLUG},
+    environment,
+    slug::Slug,
+};
 
-use super::{state::CompileState, writer::Writer};
+use super::{section::Section, state::CompileState, writer::Writer};
 
 #[derive(Debug, Clone)]
 struct FeedItem {
@@ -95,12 +101,47 @@ pub(super) fn feed_xml(state: &CompileState) -> eyre::Result<String> {
     Ok(output)
 }
 
-fn collect_items(state: &CompileState) -> eyre::Result<Vec<FeedItem>> {
+/// The section a subtree was written inside, or `None` for a file's own root
+/// section. A subtree records the slug of the file that produced it, so the two
+/// differ exactly when the section was declared inside another.
+fn source_of(section: &Section, slug: Slug) -> Option<Slug> {
+    section
+        .metadata
+        .get_str(KEY_SOURCE_SLUG)
+        .map(Slug::new)
+        .filter(|&source| source != slug)
+}
+
+/// Sections a feed could carry at all: everything except the entry point and
+/// pages that declare themselves listings rather than posts.
+fn eligible_slugs(state: &CompileState) -> eyre::Result<HashSet<Slug>> {
     let index_slug = Slug::new(super::INDEX_SLUG);
+    let mut eligible = HashSet::new();
+    for (&slug, section) in state.compiled() {
+        if slug != index_slug && !section.metadata.is_collect()? {
+            eligible.insert(slug);
+        }
+    }
+    Ok(eligible)
+}
+
+fn collect_items(state: &CompileState) -> eyre::Result<Vec<FeedItem>> {
+    let eligible = eligible_slugs(state)?;
     let mut items = Vec::new();
 
     for (&slug, section) in state.compiled() {
-        if slug == index_slug || section.metadata.is_collect()? {
+        if !eligible.contains(&slug) {
+            continue;
+        }
+
+        let source = source_of(section, slug);
+
+        // A subtree is rendered inside its source's item, so listing it
+        // separately would repeat content the subscriber already has. It earns
+        // its own item only when the source is absent from the feed — which is
+        // what marking a file `collect` declares: a container of notes rather
+        // than a post.
+        if source.is_some_and(|source| eligible.contains(&source)) {
             continue;
         }
 
@@ -112,10 +153,21 @@ fn collect_items(state: &CompileState) -> eyre::Result<Vec<FeedItem>> {
             .filter(|value| !value.is_empty())
             .unwrap_or(slug.as_str())
             .to_string();
+        // A subtree carries no date of its own; it was written when its source
+        // was, and without this it would sort to the end of the feed.
         let date = section
             .metadata
-            .get_str("date")
-            .cloned()
+            .get_str(KEY_DATE)
+            .map(|date| date.trim().to_string())
+            .filter(|date| !date.is_empty())
+            .or_else(|| {
+                let source = state.compiled().get(&source?)?;
+                source
+                    .metadata
+                    .get_str(KEY_DATE)
+                    .map(|date| date.trim().to_string())
+                    .filter(|date| !date.is_empty())
+            })
             .unwrap_or_default();
         let link = environment::full_html_url(slug);
         let content_html = Writer::rss_content_html(section, state)?;
@@ -404,6 +456,82 @@ mod tests {
             shallow("post", "Post", Some(item_date), item_content),
         );
         compile_all_without_missing_index_warning(&shallows).unwrap()
+    }
+
+    /// A file's own section plus a subtree it declared, mirroring what the
+    /// Typst parser produces: the subtree records the file as its source.
+    fn subtree_shallows(container_is_collection: bool) -> HashMap<Slug, UnresolvedSection> {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("index"),
+            shallow("index", "Site", Some("2020-01-01"), "<p>index</p>"),
+        );
+
+        let mut container = shallow("notes/algebra", "Algebra", Some("2026-05-02"), "");
+        container.content = HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+            url: "/notes/monoid".to_string(),
+            title: None,
+            option: SectionOption::default(),
+        })]);
+        container.metadata.0.insert(
+            crate::entry::KEY_SOURCE_SLUG.to_string(),
+            HTMLContent::Plain("notes/algebra".to_string()),
+        );
+        if container_is_collection {
+            container
+                .metadata
+                .0
+                .insert(KEY_COLLECT.to_string(), HTMLContent::Plain("true".to_string()));
+        }
+        shallows.insert(Slug::new("notes/algebra"), container);
+
+        // Declared inside the file, so it carries no date of its own.
+        let mut subtree = shallow("notes/monoid", "Monoid", None, "<p>A set.</p>");
+        subtree.metadata.0.insert(
+            crate::entry::KEY_SOURCE_SLUG.to_string(),
+            HTMLContent::Plain("notes/algebra".to_string()),
+        );
+        shallows.insert(Slug::new("notes/monoid"), subtree);
+
+        shallows
+    }
+
+    fn feed_slugs(state: &CompileState) -> Vec<String> {
+        let mut slugs: Vec<String> = collect_items(state)
+            .unwrap()
+            .into_iter()
+            .map(|item| item.slug.to_string())
+            .collect();
+        slugs.sort();
+        slugs
+    }
+
+    #[test]
+    fn test_subtree_is_omitted_when_its_source_is_in_the_feed() {
+        // Its content already appears inside the source's item, so a separate
+        // entry would repeat what the subscriber just read.
+        let state = compile_all_without_missing_index_warning(&subtree_shallows(false)).unwrap();
+        assert_eq!(feed_slugs(&state), vec!["notes/algebra"]);
+    }
+
+    #[test]
+    fn test_subtree_becomes_an_item_when_its_source_is_a_collection() {
+        // Marking the file a collection declares it a container of notes rather
+        // than a post, so the notes inside it are what the feed should carry.
+        let state = compile_all_without_missing_index_warning(&subtree_shallows(true)).unwrap();
+        assert_eq!(feed_slugs(&state), vec!["notes/monoid"]);
+    }
+
+    #[test]
+    fn test_subtree_item_inherits_the_date_of_its_source() {
+        // Without this it would have no pubDate and sort below every dated note.
+        let state = compile_all_without_missing_index_warning(&subtree_shallows(true)).unwrap();
+        let items = collect_items(&state).unwrap();
+        let monoid = items
+            .iter()
+            .find(|item| item.slug == Slug::new("notes/monoid"))
+            .expect("subtree item");
+        assert_eq!(monoid.date, "2026-05-02");
     }
 
     #[test]
