@@ -164,6 +164,10 @@ fn parse_typst_html(
                     ),
                     limit,
                     title: optional("title"),
+                    include_indexes: parse_bool(
+                        span.attrs.get("include-indexes"),
+                        crate::compiler::section::include_indexes_default(),
+                    ),
                 }))
             }
             HTMLTagKind::Subtree => {

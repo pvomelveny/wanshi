@@ -210,14 +210,15 @@ how a hub page stays current without being edited every time you add a note.
 
 ```typst
 #query(
-  from: "all",     // which sections to consider
-  taxon: none,     // keep only this taxon
-  key: none,       // keep only sections carrying this metadata key…
-  value: none,     // …and, with `value`, only when it equals this
-  sort: "date",    // metadata key, or "slug" / "title" / "taxon"
-  order: "asc",    // "asc" or "desc"
-  limit: none,     // keep at most this many
-  title: none,     // optional heading above the list
+  from: "all",           // which sections to consider
+  taxon: none,           // keep only this taxon
+  key: none,             // keep only sections carrying this metadata key…
+  value: none,           // …and, with `value`, only when it equals this
+  sort: "date",          // metadata key, or "slug" / "title" / "taxon"
+  order: "asc",          // "asc" or "desc"
+  limit: none,           // keep at most this many
+  title: none,           // optional heading above the list
+  include-indexes: true, // false drops directory index pages from the results
 )
 ```
 
@@ -243,6 +244,14 @@ Four shorthands cover the common cases:
 
 A listing never includes the page it is written on. Rows show taxon, title, and
 the date column, and link to the section's own page.
+
+`include-indexes: false` drops directory index pages from any listing, which is
+useful when you want the notes in a section but not its sub-hubs:
+
+```typst
+#children(include-indexes: false)   // notes only, no nested hubs
+#orphans(include-indexes: false)    // unreachable notes, ignoring unlinked hubs
+```
 
 See [Building Pages That Maintain Themselves](writing-notes.md#building-pages-that-maintain-themselves)
 for how to use these in practice.

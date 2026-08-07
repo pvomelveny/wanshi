@@ -290,8 +290,16 @@ This includes **directory index pages that nothing links to**. Being a parent
 makes a hub reachable *from* its children, not *to* it, so an unlinked
 `notes/index` really is invisible to someone browsing from the root — listing it
 is a prompt to link it from somewhere. Only the root `index` is exempt, since it
-is the entry point. If that turns out to be noisier than useful in your forest,
-say so; an opt-out is straightforward to add.
+is the entry point.
+
+If that is noisier than useful once you have many hubs, turn it off:
+
+```typst
+#orphans(include-indexes: false, title: "Unreachable notes")
+```
+
+The same option works on any listing, so `#children(include-indexes: false)`
+lists a section's notes without its sub-hubs.
 
 Anything more specific goes through `#query(...)` directly, which the four
 shorthands above are built on:

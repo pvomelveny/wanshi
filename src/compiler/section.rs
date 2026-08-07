@@ -113,6 +113,18 @@ pub struct QuerySpec {
     pub order: QueryOrder,
     pub limit: Option<usize>,
     pub title: Option<String>,
+
+    /// Whether directory index pages may appear in the results.
+    ///
+    /// Defaults to `true` on deserialization so entries cached before this
+    /// option existed keep their original behaviour instead of forcing a cache
+    /// invalidation.
+    #[serde(default = "include_indexes_default")]
+    pub include_indexes: bool,
+}
+
+pub(super) fn include_indexes_default() -> bool {
+    true
 }
 
 /// Plain HTMLs & lazy embedding HTMLs, This means that

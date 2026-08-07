@@ -107,7 +107,7 @@ fn substitute(section: &mut Section, rendered: &HashMap<String, String>) {
 /// Identical listings resolve to identical HTML, so they are rendered once.
 fn spec_cache_key(spec: &QuerySpec) -> String {
     format!(
-        "{}|{:?}|{:?}|{:?}|{:?}|{}|{:?}|{:?}|{:?}",
+        "{}|{:?}|{:?}|{:?}|{:?}|{}|{:?}|{:?}|{:?}|{}",
         spec.owner,
         spec.scope,
         spec.taxon,
@@ -117,6 +117,7 @@ fn spec_cache_key(spec: &QuerySpec) -> String {
         spec.order,
         spec.limit,
         spec.title,
+        spec.include_indexes,
     )
 }
 
@@ -205,11 +206,14 @@ fn is_descendant_of(state: &CompileState, slug: Slug, ancestor: Slug) -> bool {
 /// directory listing, which in a note forest usually means it was written and
 /// then lost track of.
 ///
-/// Directory index pages are deliberately *not* exempt. An unlinked
-/// `notes/index` is genuinely unreachable for a reader browsing from the root —
-/// being a parent makes it reachable *from* its children, not *to* it — so
-/// surfacing it is the point rather than noise. Only the root index is exempt,
-/// because it is the entry point and has nowhere to be linked from.
+/// Directory index pages are *not* exempt by default. An unlinked `notes/index`
+/// is genuinely unreachable for a reader browsing from the root — being a parent
+/// makes it reachable *from* its children, not *to* it — so surfacing it is the
+/// point rather than noise. Only the root index is exempt here, because it is
+/// the entry point and has nowhere to be linked from.
+///
+/// Callers that disagree pass `include-indexes: false`, which is applied as a
+/// general filter in [`matches_filters`] rather than special-cased here.
 fn is_orphan(state: &CompileState, slug: Slug) -> bool {
     if slug.as_str() == super::INDEX_SLUG {
         return false;
@@ -223,7 +227,21 @@ fn is_orphan(state: &CompileState, slug: Slug) -> bool {
     }
 }
 
+/// Whether `slug` names a directory index — the hub for the directory it sits
+/// in, or the root index itself.
+fn is_index_page(slug: Slug) -> bool {
+    let slug = slug.as_str();
+    slug == super::INDEX_SLUG
+        || slug
+            .strip_suffix(super::INDEX_SLUG)
+            .is_some_and(|parent| parent.ends_with('/'))
+}
+
 fn matches_filters(state: &CompileState, slug: Slug, spec: &QuerySpec) -> bool {
+    if !spec.include_indexes && is_index_page(slug) {
+        return false;
+    }
+
     let Some(section) = state.compiled().get(&slug) else {
         return false;
     };
@@ -345,6 +363,7 @@ mod tests {
             order: QueryOrder::Ascending,
             limit: None,
             title: None,
+            include_indexes: true,
         }
     }
 
@@ -492,6 +511,49 @@ mod tests {
         );
         assert!(!found.iter().any(|s| s == "notes/deep/carol"), "is the owner");
         assert!(found.iter().any(|s| s == "notes/alice"));
+    }
+
+    #[test]
+    fn test_is_index_page_matches_hubs_at_any_depth() {
+        assert!(is_index_page(Slug::new("index")));
+        assert!(is_index_page(Slug::new("notes/index")));
+        assert!(is_index_page(Slug::new("notes/deep/index")));
+
+        assert!(!is_index_page(Slug::new("notes/alice")));
+        // A note that merely ends in the word must not be mistaken for a hub.
+        assert!(!is_index_page(Slug::new("notes/reindex")));
+        assert!(!is_index_page(Slug::new("indexing")));
+    }
+
+    #[test]
+    fn test_include_indexes_defaults_to_listing_hubs() {
+        let state = compile_all_without_missing_index_warning(&forest()).unwrap();
+        let found = slugs_of(&state, &spec("stray", QueryScope::Orphans));
+
+        assert!(
+            found.iter().any(|s| s == "notes/index"),
+            "unlinked hubs are orphans by default"
+        );
+    }
+
+    #[test]
+    fn test_include_indexes_false_drops_hubs_from_any_scope() {
+        let state = compile_all_without_missing_index_warning(&forest()).unwrap();
+
+        let mut orphans = spec("stray", QueryScope::Orphans);
+        orphans.include_indexes = false;
+        let found = slugs_of(&state, &orphans);
+        assert!(!found.iter().any(|s| s.ends_with("index")), "got: {found:?}");
+        assert!(found.iter().any(|s| s == "notes/alice"), "got: {found:?}");
+
+        // The option is a general filter, not special-cased to orphans.
+        let mut children = spec("notes/index", QueryScope::Children);
+        children.include_indexes = false;
+        assert_eq!(
+            slugs_of(&state, &children),
+            vec!["notes/alice", "notes/bob"],
+            "notes/deep/index should be filtered out"
+        );
     }
 
     #[test]

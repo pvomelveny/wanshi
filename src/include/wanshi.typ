@@ -146,6 +146,8 @@
 /// - order: "asc" or "desc".
 /// - limit: keep at most this many.
 /// - title: optional heading rendered above the list.
+/// - include-indexes: whether directory index pages may appear in the results.
+///     Set to `false` to list only ordinary notes, leaving out the hubs.
 #let query(
   from: "all",
   taxon: none,
@@ -155,6 +157,7 @@
   order: "asc",
   limit: none,
   title: none,
+  include-indexes: true,
 ) = with-target-check((export-target) => {
   if export-target == "html" {
     let attrs = (from: repri(from), sort: repri(sort), order: repri(order))
@@ -163,6 +166,7 @@
     if value != none { attrs.insert("value", repri(value)) }
     if limit != none { attrs.insert("limit", repri(limit)) }
     if title != none { attrs.insert("title", repri(title)) }
+    if not include-indexes { attrs.insert("include-indexes", "false") }
     html.elem("wanshi-query", attrs: attrs)
   } else {
     // Paged output has no graph to query; show what would be listed.
@@ -174,40 +178,48 @@
 })
 
 /// Direct children of this section, oldest first.
-#let children(sort: "date", order: "asc", limit: none, title: none) = query(
+#let children(sort: "date", order: "asc", limit: none, title: none, include-indexes: true) = query(
   from: "children",
   sort: sort,
   order: order,
   limit: limit,
   title: title,
+  include-indexes: include-indexes,
 )
 
 /// The most recently dated sections in the whole forest.
-#let recent(count: 10, title: none) = query(
+#let recent(count: 10, title: none, include-indexes: true) = query(
   from: "all",
   sort: "date",
   order: "desc",
   limit: count,
   title: title,
+  include-indexes: include-indexes,
 )
 
 /// Every section carrying a given taxon.
-#let by-taxon(taxon, sort: "title", order: "asc", limit: none, title: none) = query(
+#let by-taxon(taxon, sort: "title", order: "asc", limit: none, title: none, include-indexes: true) = query(
   from: "all",
   taxon: taxon,
   sort: sort,
   order: order,
   limit: limit,
   title: title,
+  include-indexes: include-indexes,
 )
 
 /// Sections nothing links to and nothing embeds: written, then lost track of.
-#let orphans(sort: "slug", order: "asc", limit: none, title: none) = query(
+///
+/// Unlinked directory index pages count as orphans by default: being a parent
+/// makes a hub reachable *from* its children, not *to* it. Pass
+/// `include-indexes: false` to list only ordinary notes.
+#let orphans(sort: "slug", order: "asc", limit: none, title: none, include-indexes: true) = query(
   from: "orphans",
   sort: sort,
   order: order,
   limit: limit,
   title: title,
+  include-indexes: include-indexes,
 )
 
 #let embed(url, title, numbering: false, open: true, catalog: true, display-options: false) = {
