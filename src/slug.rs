@@ -109,6 +109,27 @@ impl Display for Ext {
     }
 }
 
+/// Name of the section that acts as a site's entry point, and as the listing
+/// page for the directory containing it.
+///
+/// Lives here rather than in the compiler because URL generation needs it too,
+/// and `environment` cannot depend on `compiler`.
+pub const INDEX_SLUG: &str = "index";
+
+/// The directory a slug is the index of: `notes/deep/index` is the index of
+/// `notes/deep`, and the root `index` is the index of the site root (`""`).
+///
+/// Returns `None` for anything that is not a directory index, so `notes/reindex`
+/// is not mistaken for one.
+pub fn directory_of_index(slug: Slug) -> Option<&'static str> {
+    let slug = slug.as_str();
+    if slug == INDEX_SLUG {
+        return Some("");
+    }
+    slug.strip_suffix(INDEX_SLUG)
+        .and_then(|parent| parent.strip_suffix('/'))
+}
+
 pub fn to_hash_id(slug_str: &str) -> String {
     if let Some((prefix, last)) = slug_str.rsplit_once('/') {
         if last.starts_with(':') {
@@ -161,6 +182,23 @@ mod tests {
         assert_eq!(to_slug("a.b"), Slug::new("a.b"));
         assert_eq!(to_slug("a.b/c.d"), Slug::new("a.b/c.d"));
         assert_eq!(to_slug("a.b.md"), Slug::new("a.b.md"));
+    }
+
+    #[test]
+    fn test_directory_of_index_identifies_hubs_at_any_depth() {
+        assert_eq!(directory_of_index(Slug::new("index")), Some(""));
+        assert_eq!(directory_of_index(Slug::new("notes/index")), Some("notes"));
+        assert_eq!(
+            directory_of_index(Slug::new("notes/deep/index")),
+            Some("notes/deep")
+        );
+    }
+
+    #[test]
+    fn test_directory_of_index_rejects_names_that_merely_end_in_index() {
+        assert_eq!(directory_of_index(Slug::new("notes/reindex")), None);
+        assert_eq!(directory_of_index(Slug::new("indexing")), None);
+        assert_eq!(directory_of_index(Slug::new("notes/alice")), None);
     }
 
     #[test]

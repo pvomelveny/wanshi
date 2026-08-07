@@ -15,7 +15,7 @@ use crate::{
     environment,
     ordered_map::OrderedMap,
     path_utils,
-    slug::{self, Slug},
+    slug::{self, Slug, INDEX_SLUG},
 };
 
 use super::{
@@ -405,10 +405,6 @@ impl CompileState {
             })
     }
 }
-
-/// Name of the section that acts as the entry point, and as the listing page for
-/// the directory containing it.
-pub const INDEX_SLUG: &str = "index";
 
 /// The directory index that owns `slug`: `notes/deep/alice` prefers
 /// `notes/deep/index`, then `notes/index`, then the root `index`.

@@ -122,11 +122,16 @@ it as a placeholder to edit.
 The slug is the note's permanent identity: its URL, its link target, and its
 sort key. It is simply the source path under the tree, minus the extension:
 
-| Source file | Slug | Page |
+| Source file | Slug | Linked as |
 | --- | --- | --- |
-| `trees/index.typ` | `index` | `/index.html` |
+| `trees/index.typ` | `index` | `/` |
 | `trees/notes/monoids.typ` | `notes/monoids` | `/notes/monoids.html` |
 | `trees/refs/knuth.typ` | `refs/knuth` | `/refs/knuth.html` |
+| `trees/notes/index.typ` | `notes/index` | `/notes/` |
+
+A note named `index` is linked as its directory, since that is what serves it —
+`/notes/` rather than `/notes/index.html`. The longer form still works, so
+anything already linking to it keeps resolving.
 
 Two consequences worth internalising before you have a hundred notes:
 

@@ -23,6 +23,23 @@ pub fn full_url<P: AsRef<Utf8Path>>(path: P) -> String {
 }
 
 pub fn full_html_url(slug: Slug) -> String {
+    // A directory index is already served by its directory: `notes/index.html`
+    // answers a request for `notes/`, so link to the directory. This also makes
+    // the URL agree with the slug shown beside the title, which already reads
+    // `[notes]` rather than `[notes/index]`.
+    //
+    // Built here rather than through `full_url`, which normalizes paths and
+    // would drop the trailing slash. The slash is load-bearing: without it a
+    // relative reference from the page resolves against the parent directory.
+    if let Some(directory) = crate::slug::directory_of_index(slug) {
+        let base_url = super::base_url();
+        return if directory.is_empty() {
+            base_url
+        } else {
+            format!("{base_url}{directory}/")
+        };
+    }
+
     let pretty_urls = super::with_config(|cfg| cfg.build.pretty_urls);
     let page_suffix = super::to_page_suffix(pretty_urls);
     full_url(format!("{}{}", slug, page_suffix))
@@ -130,6 +147,39 @@ mod tests {
             assert_eq!(full_url("/notes/a"), format!("{base}notes/a"));
             assert_eq!(full_url("./notes/a"), format!("{base}notes/a"));
             assert_eq!(full_url("notes/a"), format!("{base}notes/a"));
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn test_full_html_url_links_directory_indexes_to_their_directory() {
+        let root = crate::test_io::case_dir("env-paths-dir-index");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let base = super::super::base_url();
+
+            // The trailing slash matters: without it a relative reference from
+            // the page would resolve against the parent directory.
+            assert_eq!(full_html_url(Slug::new("notes/index")), format!("{base}notes/"));
+            assert_eq!(
+                full_html_url(Slug::new("notes/deep/index")),
+                format!("{base}notes/deep/")
+            );
+            // The root index is the site root.
+            assert_eq!(full_html_url(Slug::new("index")), base);
+
+            // Ordinary pages are untouched.
+            assert_eq!(
+                full_html_url(Slug::new("notes/alice")),
+                format!("{base}notes/alice.html")
+            );
+            // A name that merely ends in the word is not a directory index.
+            assert_eq!(
+                full_html_url(Slug::new("notes/reindex")),
+                format!("{base}notes/reindex.html")
+            );
         });
 
         let _ = fs::remove_dir_all(root);

@@ -51,7 +51,7 @@ use self::{
 };
 
 pub use incremental::expand_dirty_paths;
-pub use state::INDEX_SLUG;
+pub use crate::slug::INDEX_SLUG;
 pub use serve_session::ServeCompileSession;
 pub use source_scan::{all_trees_source, is_section_source_path, Workspace};
 

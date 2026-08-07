@@ -60,6 +60,10 @@ Local section links, embeds, and named subtree slugs all resolve through one rul
 
 Asset links are recognized by checking whether the normalized target path starts within the configured assets root.
 
+A section named `index` is linked as its containing directory rather than as a file: the root index as the site root, and a directory index as `<dir>/`. Nothing about the output changes — the page is still written to `<dir>/index.html`, which is precisely the file a server returns for a directory request — so this is purely which URL gets generated. Two consequences follow from that. The previously generated `<dir>/index.html` form keeps working, since the file is still there, making the change non-breaking for anything already published or linked externally. And it removes an inconsistency, because the slug shown beside a title already omits a trailing `/index` and so already read as the bare directory.
+
+The trailing slash is load-bearing and the URL is therefore assembled directly rather than through the general path helper, which normalizes and would discard it. Without the slash a relative reference from the page would resolve against the parent directory instead of the page's own.
+
 ## CLI Workflows
 
 ### Build
@@ -312,10 +316,6 @@ Two features reduce rendered sections to plain text: RSS summaries and the searc
 The effect is a summary with holes where the formulas were, so a sentence can end on stranded punctuation: "isomorphic to a subgroup of the symmetric group acting on ." The consequences differ by consumer. A feed reader showing full content renders the mathematics correctly, because the encoded content keeps the SVG; only the plain-text summary shown in a list view is affected. The search index is affected more fundamentally: a note is not findable by any symbol it contains.
 
 The only real fix is upstream of the extraction — having the Typst library emit the mathematical source alongside the rendered SVG, as an accessible label. That would serve summaries, search, and screen readers at once, which is why it is the option worth taking when this becomes worth taking. It is deferred because extracting readable source from an equation is awkward in Typst and needs experimentation rather than a known recipe. Substituting a placeholder for the removed markup was considered and rejected: it trades missing text for different noise without making anything findable.
-
-### Directory indexes do not have directory URLs
-
-A directory index publishes to `<dir>/index.html` rather than `<dir>/`, even though it is structurally the hub for that directory and its slug already displays as the bare directory name. Mapping it to the directory URL would read better, but it interacts with the pretty-URL setting and with how a given host resolves directory requests, so it is a URL-policy change rather than a rendering one. Changing generated URLs is breaking unless gated by configuration.
 
 ### Search index growth is bounded only by vocabulary
 
