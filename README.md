@@ -14,6 +14,14 @@ wanshi is a fork of [kodama](https://github.com/kodama-community/kodama) (see `N
 
 - Organize Typst files in the manner of [Jon Sterling](https://www.jonmsterling.com/index/index.xml)'s [Forester](https://www.forester-notes.org/index/index.xml).
 
+## Requirements
+
+[Typst](https://typst.app) on your `PATH` — wanshi compiles every note with it.
+`wanshi serve` additionally needs a static file server, by default
+[`miniserve`](https://github.com/svenstaro/miniserve); see
+[Getting Started](/docs/users/getting-started.md#prerequisites) for the
+alternatives.
+
 ## Quick Start
 
 ```sh

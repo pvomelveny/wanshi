@@ -6,13 +6,33 @@ can produce optional machine-readable indexes.
 
 ## Prerequisites
 
-- The `wanshi` binary.
-- [Typst](https://typst.app) installed and available on `PATH`. wanshi shells out
-  to it, so the whole language and package ecosystem are available in notes.
-- A local static file server for `wanshi serve`. The default serve command uses
-  [`miniserve`](https://github.com/svenstaro/miniserve); install it with
-  `cargo install miniserve` or `brew install miniserve`, or point
-  `[serve].command` at any other static server.
+**Required.** [Typst](https://typst.app) on your `PATH`. wanshi shells out to it
+to compile every note, so nothing builds without it.
+
+```sh
+brew install typst        # or: cargo install typst-cli
+```
+
+**Required for `wanshi serve` only.** A static file server. wanshi builds and
+watches your notes itself, but delegates the actual HTTP serving to a separate
+program — by default [`miniserve`](https://github.com/svenstaro/miniserve):
+
+```sh
+brew install miniserve    # or: cargo install miniserve
+```
+
+You do not have to use miniserve. Point `[serve].command` at any static server:
+
+```toml
+[serve]
+command = ["python3", "-m", "http.server", "8080", "-d", "<output>"]
+```
+
+Or skip the server entirely with `wanshi serve --no-server`, which still builds,
+watches, and rebuilds — you just serve the output directory yourself.
+
+Neither `wanshi build` nor `wanshi check` needs a server, so publishing and CI
+require only Typst.
 
 ## Create a Site
 
