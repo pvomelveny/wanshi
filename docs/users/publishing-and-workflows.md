@@ -298,8 +298,13 @@ codesign --force --deep -s - ~/Applications/WanshiEdit.app
 ```
 
 The helper at `~/.local/bin/wanshi-edit` strips the scheme and hands the file to
-Neovim. Prefer an **already-running session** over launching a new one, so you
-land back where your plugins and preview are loaded:
+Neovim. It tries hardest to land you where you are already working:
+
+1. **A running Neovim session** — reuses your editor, with its plugins and
+   preview already loaded.
+2. **A running tmux session** — a new window beside your other work, rather than
+   a stray terminal.
+3. **A new terminal window** — only when neither is running.
 
 ```sh
 #!/bin/bash
@@ -307,25 +312,37 @@ set -u
 path="${1#nvim://}"; path="${path#file}"
 path="$(printf '%b' "${path//%/\\x}")"        # percent-decode
 
+raise() { open -a Ghostty 2>/dev/null || true; }
 alive() { [ -S "$1" ] && nvim --server "$1" --remote-expr '1' >/dev/null 2>&1; }
 
+# 1. A live Neovim session.
 sock=""
-# The session you last focused, if your config records it (see below).
-marker="$HOME/.cache/nvim/last-server"
-[ -r "$marker" ] && candidate="$(cat "$marker")" && alive "$candidate" && sock="$candidate"
-# Otherwise the most recently started live session.
+marker="$HOME/.cache/nvim/last-server"        # written by an autocmd, if you add one
+[ -r "$marker" ] && c="$(cat "$marker")" && alive "$c" && sock="$c"
 if [ -z "$sock" ]; then
     for c in $(ls -t "${TMPDIR:-/tmp}"/nvim."$(id -un)"/*/nvim.*.0 2>/dev/null); do
         alive "$c" && { sock="$c"; break; }
     done
 fi
-
 if [ -n "$sock" ]; then
-    nvim --server "$sock" --remote "$path"
-    open -a Ghostty          # --remote opens the buffer but does not raise the window
-else
-    open -na Ghostty.app --args --window-save-state=never -e nvim "$path"
+    nvim --server "$sock" --remote "$path"    # opens the buffer…
+    raise                                     # …but does not raise the window
+    exit 0
 fi
+
+# 2. A running tmux server: prefer an attached session, else the most recent.
+if command -v tmux >/dev/null 2>&1 && tmux list-sessions >/dev/null 2>&1; then
+    session="$(tmux list-sessions -F '#{session_attached} #{session_activity} #{session_name}' \
+               2>/dev/null | sort -k1,1nr -k2,2nr | head -1 | awk '{print $3}')"
+    if [ -n "$session" ]; then
+        tmux new-window -t "$session" -- nvim "$path"
+        raise
+        exit 0
+    fi
+fi
+
+# 3. Nothing running.
+open -na Ghostty.app --args --window-save-state=never -e nvim "$path"
 ```
 
 Substitute your terminal for Ghostty. Two things that cost time otherwise:
