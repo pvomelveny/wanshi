@@ -324,7 +324,7 @@ if [ -n "$sock" ]; then
     nvim --server "$sock" --remote "$path"
     open -a Ghostty          # --remote opens the buffer but does not raise the window
 else
-    open -na Ghostty.app --args -e nvim "$path"
+    open -na Ghostty.app --args --window-save-state=never -e nvim "$path"
 fi
 ```
 
@@ -332,6 +332,11 @@ Substitute your terminal for Ghostty. Two things that cost time otherwise:
 
 - **Ghostty cannot be launched from the CLI on macOS.** Use
   `open -na Ghostty.app --args …`; a direct `ghostty -e …` will not work.
+- **`open -n` starts a new *application instance*, which restores its saved
+  windows.** Without `--window-save-state=never` a single click can reopen
+  several terminals at once — one measured launch produced five. The flag is in
+  the script above; setting `window-save-state = never` in your Ghostty config
+  has the same effect.
 - **Ghostty strips arguments beginning with `+`**, since that is its own action
   syntax. `nvim +42 file` silently loses the line number; use `nvim -c 42 file`.
 
