@@ -270,11 +270,11 @@ fn normalize_pub_date(date: &str) -> Option<String> {
         return None;
     }
 
-    Some(
-        crate::footer_sort::parse_date(date)
-            .and_then(format_rfc822_date)
-            .unwrap_or_else(|| date.to_string()),
-    )
+    // RSS constrains pubDate to RFC 822. A value that cannot be converted is
+    // omitted rather than passed through: `pubDate` is optional, so leaving it
+    // out yields a valid feed, while emitting `1971` yields a malformed one that
+    // strict readers reject and lenient ones guess at.
+    crate::footer_sort::parse_date(date).and_then(format_rfc822_date)
 }
 
 fn format_rfc822_date((year, month, day): (u32, u8, u8)) -> Option<String> {
@@ -577,9 +577,14 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_pub_date_keeps_raw_when_unparseable() {
-        let formatted = normalize_pub_date("not-a-date");
-        assert_eq!(formatted, Some("not-a-date".to_string()));
+    fn test_normalize_pub_date_omits_values_it_cannot_format() {
+        // RSS requires RFC 822 here, so a date that cannot be converted must be
+        // left out rather than emitted as-is. A bare year is the common case:
+        // it is a perfectly good `date` for a bibliography entry, and a
+        // perfectly bad `pubDate`.
+        assert_eq!(normalize_pub_date("not-a-date"), None);
+        assert_eq!(normalize_pub_date("1971"), None);
+        assert_eq!(normalize_pub_date(""), None);
     }
 
     #[test]
@@ -599,11 +604,13 @@ mod tests {
     }
 
     #[test]
-    fn test_feed_xml_keeps_raw_pub_date_when_unparseable() {
+    fn test_feed_xml_omits_pub_date_it_cannot_format() {
         let state = compile_state_for_feed("not-a-date", "<p>Hello</p>");
         let xml = feed_xml(&state).unwrap();
-        assert!(xml.contains("<pubDate>not-a-date</pubDate>"));
+        assert!(!xml.contains("<pubDate>"), "got: {xml}");
         assert!(!xml.contains("<lastBuildDate>"));
+        // The item itself is still published; only the date is dropped.
+        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
     }
 
     #[test]
