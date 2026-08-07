@@ -138,7 +138,9 @@ word used in a hundred notes is stored once. You cannot reconstruct a note from
 it, and it is roughly a third the size of shipping the text.
 
 Inline math and diagrams are excluded: Typst renders them as SVG, and indexing
-that would fill the index with coordinates and colour values.
+that would fill the index with coordinates and colour values. The practical
+consequence is that **a note is not findable by a symbol it contains** — search
+for the words around a formula, not the formula.
 
 Set `search-content = false` to index only titles, taxons, and slugs. That makes
 the index negligible in size at any scale, but you can then only find a note by

@@ -119,6 +119,16 @@ rather than falling to the end of the feed.
 Anonymous subtrees — those written without `slug:` — are never feed items, since
 they have no page of their own.
 
+### Mathematics in Summaries
+
+Item summaries are plain text, and Typst renders mathematics as images, so
+**formulas do not appear in the summary** — a sentence built around one can read
+oddly in a reader's list view.
+
+The full article does keep its mathematics: readers that show an item's whole
+content render it normally. Only the short summary is affected. If it bothers
+you, write the opening sentence or two of a note in prose.
+
 ### Checking the Result
 
 `feed.xml` is plain XML; a quick look confirms the shape:

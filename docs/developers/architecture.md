@@ -300,3 +300,23 @@ It reports:
 - Graph compilation failures, including cyclic embeds and missing embed targets, as errors.
 
 Strict mode upgrades warnings into command failure. Hints remain informational.
+
+## Future Considerations
+
+Known limits of the current design, recorded so they read as decisions rather than oversights. Each is deferred because the cost of addressing it currently exceeds the harm, not because it is unnoticed.
+
+### Mathematics is invisible to plain-text consumers
+
+Two features reduce rendered sections to plain text: RSS summaries and the search index. Both lose all mathematics, because Typst renders math as vector SVG containing only path, symbol, and use elements — no title, no accessible label, no text node of any kind. There is nothing to recover.
+
+The effect is a summary with holes where the formulas were, so a sentence can end on stranded punctuation: "isomorphic to a subgroup of the symmetric group acting on ." The consequences differ by consumer. A feed reader showing full content renders the mathematics correctly, because the encoded content keeps the SVG; only the plain-text summary shown in a list view is affected. The search index is affected more fundamentally: a note is not findable by any symbol it contains.
+
+The only real fix is upstream of the extraction — having the Typst library emit the mathematical source alongside the rendered SVG, as an accessible label. That would serve summaries, search, and screen readers at once, which is why it is the option worth taking when this becomes worth taking. It is deferred because extracting readable source from an equation is awkward in Typst and needs experimentation rather than a known recipe. Substituting a placeholder for the removed markup was considered and rejected: it trades missing text for different noise without making anything findable.
+
+### Directory indexes do not have directory URLs
+
+A directory index publishes to `<dir>/index.html` rather than `<dir>/`, even though it is structurally the hub for that directory and its slug already displays as the bare directory name. Mapping it to the directory URL would read better, but it interacts with the pretty-URL setting and with how a given host resolves directory requests, so it is a URL-policy change rather than a rendering one. Changing generated URLs is breaking unless gated by configuration.
+
+### Search index growth is bounded only by vocabulary
+
+The inverted index is far smaller than the prose it derives from, and the ratio improves with corpus size as vocabulary saturates. It is nonetheless unbounded: the postings grow with the number of sections, and the client fetches the whole index on first use. There is no incremental or sharded loading, and no server to query against. A forest large enough for that to matter would want a different retrieval design, not a larger version of this one; the escape hatch until then is disabling body indexing, which reduces the index to titles.
