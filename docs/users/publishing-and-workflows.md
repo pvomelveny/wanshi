@@ -219,31 +219,168 @@ edited that file locally, diff before syncing — the upgrade overwrites it.
 
 ## Editor Integration
 
-Generate VS Code snippets:
+Every section header can carry an `[edit]` link that opens that note's source.
+It is the fastest way to work: read the rendered page, spot something wrong,
+click through to the exact file.
+
+### How Edit Links Work
+
+Two settings, for two different situations:
+
+```toml
+[serve]
+edit = "vscode://file/"              # local preview — opens your editor
+
+[build]
+edit = "https://example.com/edit/"   # published pages — opens a web editor
+```
+
+- **`[serve].edit`** is a URL prefix with the file's **absolute path** appended,
+  so it can address a file on your own machine. Defaults to `vscode://file/`.
+- **`[build].edit`** is a prefix with the note's **repository-relative path**
+  appended, which suits a forge URL like
+  `https://github.com/you/notes/edit/main/trees/`. It is unset by default, so
+  published pages carry no edit link unless you ask for one.
+
+Anything that can be expressed as a URL works. The rest of this section is
+per-editor detail; contributions welcome as more are worked out.
+
+### VS Code
+
+Works with no setup — it is the default, and VS Code registers the `vscode://`
+scheme when installed:
+
+```toml
+[serve]
+edit = "vscode://file/"
+```
+
+Variants are recognised too: `vscode-insiders://file/`, `vsc://file/`,
+`vscodium://file/`.
+
+### Neovim
+
+Neovim is a terminal program, not a URL target, so it needs a small handler that
+the browser can invoke. Point wanshi at a scheme of your choosing:
+
+```toml
+[serve]
+edit = "nvim://file/"
+```
+
+Then register a handler for it. On macOS this must be an **app bundle**, because
+the URL arrives as an Apple Event rather than as a command-line argument — a
+bare shell script will never see it.
+
+Compile a one-line AppleScript that forwards the URL to a helper:
+
+```applescript
+on open location this_URL
+	set helper to (POSIX path of (path to home folder)) & ".local/bin/wanshi-edit"
+	do shell script quoted form of helper & " " & quoted form of this_URL
+end open location
+```
+
+```sh
+osacompile -o ~/Applications/WanshiEdit.app handler.applescript
+```
+
+Declare the scheme in the bundle, re-sign it, and register it:
+
+```sh
+PLIST=~/Applications/WanshiEdit.app/Contents/Info.plist
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string nvim" "$PLIST"
+codesign --force --deep -s - ~/Applications/WanshiEdit.app
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f ~/Applications/WanshiEdit.app
+```
+
+The helper at `~/.local/bin/wanshi-edit` strips the scheme and hands the file to
+Neovim. Prefer an **already-running session** over launching a new one, so you
+land back where your plugins and preview are loaded:
+
+```sh
+#!/bin/bash
+set -u
+path="${1#nvim://}"; path="${path#file}"
+path="$(printf '%b' "${path//%/\\x}")"        # percent-decode
+
+alive() { [ -S "$1" ] && nvim --server "$1" --remote-expr '1' >/dev/null 2>&1; }
+
+sock=""
+# The session you last focused, if your config records it (see below).
+marker="$HOME/.cache/nvim/last-server"
+[ -r "$marker" ] && candidate="$(cat "$marker")" && alive "$candidate" && sock="$candidate"
+# Otherwise the most recently started live session.
+if [ -z "$sock" ]; then
+    for c in $(ls -t "${TMPDIR:-/tmp}"/nvim."$(id -un)"/*/nvim.*.0 2>/dev/null); do
+        alive "$c" && { sock="$c"; break; }
+    done
+fi
+
+if [ -n "$sock" ]; then
+    nvim --server "$sock" --remote "$path"
+    open -a Ghostty          # --remote opens the buffer but does not raise the window
+else
+    open -na Ghostty.app --args -e nvim "$path"
+fi
+```
+
+Substitute your terminal for Ghostty. Two things that cost time otherwise:
+
+- **Ghostty cannot be launched from the CLI on macOS.** Use
+  `open -na Ghostty.app --args …`; a direct `ghostty -e …` will not work.
+- **Ghostty strips arguments beginning with `+`**, since that is its own action
+  syntax. `nvim +42 file` silently loses the line number; use `nvim -c 42 file`.
+
+Each candidate socket is probed before use, so a stale socket left by a crashed
+Neovim is skipped rather than swallowing the click.
+
+For the handler to prefer the session you were **last using** rather than the
+one most recently started — which differ once two are open — have Neovim record
+it, since a Unix socket carries no usage timestamp:
+
+```lua
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter" }, {
+  callback = function()
+    if vim.v.servername ~= "" then
+      vim.fn.writefile({ vim.v.servername }, vim.fn.stdpath("cache") .. "/last-server")
+    end
+  end,
+})
+```
+
+### Other Editors
+
+Any editor registering a URL scheme works the same way — set `[serve].edit` to
+its prefix. An editor without one needs a handler like the Neovim recipe above.
+
+### Snippets
 
 ```sh
 wanshi snip --katex
 ```
 
-Configure edit links separately for publish and serve workflows:
+Writes `.vscode/katex.code-snippets`.
 
-```toml
-[build]
-edit = "https://example.com/edit/"
-
-[serve]
-edit = "vscode://file/"
-```
-
-Each section header then carries an `[edit]` link. For VS Code-family prefixes
-(`vscode://file/`, `vscode-insiders://file/`, `vsc://file/`, `vscodium://file/`)
-wanshi appends the source line and column, so the link opens at the right place
-in the file. `[build].edit` is unset by default, which means published pages
-carry no edit link.
+### Editor-Driven Builds
 
 For tooling that drives wanshi itself, `wanshi serve --no-server --print-json`
 emits line-delimited JSON build events; see the
 [command reference](commands.md#editor-integration-events).
+
+### Limitation: No Line Numbers
+
+Edit links open a file at its beginning, never at a specific line. wanshi has
+the machinery to append a position, but never records one, so this affects every
+editor equally.
+
+It matters most for **subtrees**: a subtree's edit link opens the top of the
+file that declares it rather than the subtree itself. For a note that occupies
+its own file — the common case — the beginning of the file is the right place
+anyway.
 
 ## Troubleshooting
 
