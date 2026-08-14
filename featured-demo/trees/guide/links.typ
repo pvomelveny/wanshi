@@ -1,0 +1,92 @@
+#import "/_lib/wanshi.typ": *
+#import "/_showcase.typ": showcase
+
+#show: showcase
+
+#metadata((
+  "title": "Links, references, and backlinks",
+  "taxon": "exegesis",
+  "date": "2026-08-12",
+  // Overrides `[build].footer-mode` for this page only, so the reference at
+  // the bottom renders in full rather than as a title.
+  "footer-mode": "embed",
+))
+
+Three kinds of connection, each written differently.
+
+== Internal links
+
+`local` takes a slug and renders the target's own title:
+
+```typst
+Built on #local("/guide/slugs").
+```
+
+Built on #local("/guide/slugs").
+
+Pass `text:` to say something else, when the title would not read well in the
+sentence:
+
+```typst
+The #local("/guide/slugs", text: "addressing rules") make this work.
+```
+
+The #local("/guide/slugs", text: "addressing rules") make this work.
+
+Because the plain form renders the *target's* title, retitling a note updates
+every sentence that links to it. That is worth preferring where the grammar
+allows it.
+
+== External links
+
+`external` takes a URL and the text to show:
+
+```typst
+#external("https://typst.app", "Typst")
+```
+
+#external("https://typst.app", "Typst") — external links leave the graph
+entirely. They generate no backlink and appear in no listing.
+
+== References
+
+A note marked `asref` is treated as a citation rather than an inline link: it
+collects in the footer instead of interrupting the sentence. The notes under
+#local("/refs/index") are marked that way, so this citation of
+#local("/refs/knuth-1984") drops to the bottom of the page rather than reading
+as a detour.
+
+Set it per note:
+
+```typst
+#metadata((
+  "title": "Literate Programming",
+  "taxon": "reference",
+  "asref": "true",
+))
+```
+
+or for the whole site with `asref = true` under `[build]`, which makes *every*
+linked note behave this way.
+
+== Backlinks
+
+Backlinks are automatic and need no syntax: link to a note and that note gains a
+backlink to you. This page links #local("/guide/slugs"), so `guide/slugs` lists
+this page among its backlinks — look at the footer there.
+
+Two metadata keys adjust the behaviour. `"backlinks": "false"` hides the section
+on a note that would otherwise show one; `"asback": "false"` stops a note's
+outbound links from generating backlinks at all, which suits an index page whose
+job is to link everything without cluttering what it links.
+
+== Footers
+
+Both references and backlinks render in the footer. `[build].footer-mode`
+chooses how:
+
+- `link` — a list of titles.
+- `embed` — the referenced notes rendered in place, in full.
+
+This page overrides the site default to embed, so the reference below appears
+whole rather than as a title. Compare it with any other page in the guide.

@@ -22,11 +22,16 @@ search = "Search  /"
 typst-root = "trees"
 short-slug = false
 pretty-urls = false
-footer-mode = "embed"
+# `link` lists referenced notes by title. `guide/links` overrides this to
+# `embed` for itself, so the two renderings can be compared side by side.
+footer-mode = "link"
 footer-sort-by = "slug"
 inline-css = false
 inline-script = false
-asref = true
+# Left off deliberately: with `asref = true` every linked note becomes a
+# citation. This forest instead marks individual notes with `"asref": "true"`,
+# which is what `refs/` demonstrates.
+asref = false
 output = "./publish"
 search = true
 search-content = true
@@ -37,4 +42,6 @@ output = "./.cache/publish"
 command = ["miniserve", "<output>", "--index", "index.html", "--pretty-urls", "--port", "8087"]
 
 [publish]
+# Off because a feed needs an absolute `base-url` to be useful, and this demo
+# uses "/" so it can be previewed locally. To try it: set both.
 rss = false
