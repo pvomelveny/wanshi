@@ -56,8 +56,13 @@ trees/                source tree
 trees/index.typ     starter index section
 trees/_lib/wanshi.typ the bundled Typst library
 assets/               static files, copied verbatim into the output
+assets/favicon.ico  the default icon; replace it with your own
 .gitignore
 ```
+
+Every generated page links `favicon.ico` from the assets directory, so the
+scaffold ships one rather than leaving the link pointing at nothing. Replace the
+file to change the icon — the name is what the pages reference.
 
 ## Write Your First Note
 

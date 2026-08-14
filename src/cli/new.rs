@@ -70,6 +70,11 @@ pub fn add_project_files(site_path: &Utf8Path) -> eyre::Result<()> {
     std::fs::create_dir(&default_assets_dir)
         .wrap_err("failed to create default assets directory")?;
 
+    // Every generated page links a favicon, so ship one: an empty assets
+    // directory means a 404 on every request until the author supplies it.
+    std::fs::write(default_assets_dir.join("favicon.ico"), DEFAULT_FAVICON)
+        .wrap_err("failed to create default favicon")?;
+
     // Create the .gitignore
     std::fs::write(&default_gitignore_path, DEFAULT_GITIGNORE)
         .wrap_err("failed to create .gitignore")?;
@@ -111,6 +116,12 @@ pub fn new_config_inner(config_path: &Utf8PathBuf) -> Result<(), eyre::Error> {
     println!("Created new config at: {}", config_path);
     Ok(())
 }
+
+/// Icon shipped into a new site's assets directory.
+///
+/// Bytes rather than text: an ICO is binary, and `include_bytes!` keeps it in
+/// the binary so `wanshi new site` stays a single self-contained command.
+pub const DEFAULT_FAVICON: &[u8] = include_bytes!("../include/favicon.ico");
 
 pub const DEFAULT_SECTION_PATH: &str = "./index.typ";
 
@@ -260,6 +271,39 @@ mod tests {
             let path = normalize_new_section_path(Utf8Path::new(name))
                 .expect("should preserve an explicit source extension");
             assert_eq!(path, Utf8PathBuf::from(name));
+        }
+    }
+
+    #[test]
+    fn test_default_favicon_is_a_well_formed_icon() {
+        // Every generated page links this file, so a truncated or wrongly typed
+        // include would 404 on every request of every scaffolded site.
+        let reserved = u16::from_le_bytes([DEFAULT_FAVICON[0], DEFAULT_FAVICON[1]]);
+        let kind = u16::from_le_bytes([DEFAULT_FAVICON[2], DEFAULT_FAVICON[3]]);
+        let count = u16::from_le_bytes([DEFAULT_FAVICON[4], DEFAULT_FAVICON[5]]);
+
+        assert_eq!(reserved, 0, "ICONDIR reserved field must be zero");
+        assert_eq!(kind, 1, "resource type must be icon, not cursor");
+        assert!(count > 0, "icon must declare at least one image");
+
+        // Each directory entry must address bytes that are actually present.
+        for index in 0..count as usize {
+            let entry = 6 + 16 * index;
+            let size = u32::from_le_bytes(
+                DEFAULT_FAVICON[entry + 8..entry + 12]
+                    .try_into()
+                    .expect("4 bytes"),
+            ) as usize;
+            let offset = u32::from_le_bytes(
+                DEFAULT_FAVICON[entry + 12..entry + 16]
+                    .try_into()
+                    .expect("4 bytes"),
+            ) as usize;
+
+            assert!(
+                offset + size <= DEFAULT_FAVICON.len(),
+                "entry {index} points past the end of the file"
+            );
         }
     }
 

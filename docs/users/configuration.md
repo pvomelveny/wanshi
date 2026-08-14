@@ -233,7 +233,7 @@ Depending on command flags and configuration, wanshi writes:
 - HTML pages for visible sections.
 - `main.css` unless CSS is inlined.
 - `main.js` unless JavaScript is inlined.
-- A copied assets directory.
+- A copied assets directory, including `favicon.ico`, which every page links.
 - `wanshi.json` when metadata indexes are enabled.
 - `wanshi.graph.json` when graph output is enabled.
 - `wanshi.search.json` when search is enabled.
