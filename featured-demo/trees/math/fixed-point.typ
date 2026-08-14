@@ -13,7 +13,12 @@
 A worked note: real mathematics, written the way any Typst document would be,
 using the semantic subtree helpers from #local("/guide/subtrees").
 
-#definition(slug: "contraction", title: "Contraction")[
+The statements below are numbered, following the usual convention of a single
+shared counter across statement types — so the theorem is 2 because the
+definition took 1. The proof is left unnumbered, as proofs conventionally are.
+How that works, and when it is a bad idea, is at the bottom of this page.
+
+#definition(slug: "contraction", title: "Contraction", numbering: true)[
   Let $(X, d)$ be a metric space. A map $T colon X -> X$ is a *contraction* if
   there is some $q < 1$ with
 
@@ -22,7 +27,7 @@ using the semantic subtree helpers from #local("/guide/subtrees").
   The smallest such $q$ is the *Lipschitz constant* of $T$.
 ]
 
-#theorem(title: "Banach, 1922")[
+#theorem(title: "Banach, 1922", numbering: true)[
   Every contraction on a non-empty complete metric space has exactly one fixed
   point $x^*$, and for any starting $x_0$ the sequence $x_(n+1) = T(x_n)$
   converges to it.
@@ -40,7 +45,7 @@ using the semantic subtree helpers from #local("/guide/subtrees").
   which forces $d(x^*, y^*) = 0$.
 ]
 
-#remark(title: "Why completeness is not optional")[
+#remark(title: "Why completeness is not optional", numbering: true)[
   On $X = (0, 1]$ with the usual metric, $T(x) = x/2$ is a contraction with no
   fixed point in $X$. The iterates converge, but to a point that was removed
   from the space.
@@ -88,3 +93,52 @@ Typst packages work normally. `auto-frame` renders a diagram to SVG and
 
 Formulas and diagrams are both recoloured to match the page, so they do not
 arrive as black-on-white rectangles pasted onto a parchment background.
+
+== Numbering
+
+Every subtree and embed takes `numbering`, off by default. Turning it on
+prefixes the *taxon* with a counter, which is what produces `Definition 1.` and
+`Theorem 2.` above:
+
+```typst
+#definition(title: "Contraction", numbering: true)[ ... ]
+#theorem(title: "Banach, 1922", numbering: true)[ ... ]
+#proof[ ... ]
+```
+
+Two details of how the counter behaves:
+
+#subtree(title: "One counter, shared by every taxon", taxon: "observation")[
+  The theorem above is numbered 2, not 1, because the definition took 1. There
+  is no separate counter per statement type. That matches the common convention
+  of a single shared counter, and it is the reason a numbered remark can appear
+  as `Remark 3.`
+
+  Leaving `numbering` off, as the proof does, takes a block out of the sequence
+  entirely rather than giving it a number nobody cites.
+]
+
+#subtree(title: "Nesting adds a level", taxon: "observation")[
+  A numbered subtree inside a numbered subtree counts as `1.1`, `1.2`, and so
+  on, so a definition with numbered sub-remarks reads the way it would on paper.
+]
+
+=== Why the rest of this forest does not use it
+
+A number is a property of *where a note is rendered*, not of the note. Embed the
+same note in two pages and it takes a different number in each — first on one
+page, third on another if two numbered blocks precede it. Insert a statement
+earlier and everything after it renumbers.
+
+So "see Theorem 2" is not a durable reference here. Within one long,
+self-contained note like this one it is fine, because the context is fixed and
+nothing embeds these statements elsewhere. Across the forest it is not: every
+page starts its own counter, so several notes are `Theorem 1.`
+
+The alternative is the one #local("/guide/links") describes. Writing
+#local("/math/contraction") renders the target's own title, survives renaming,
+and means the same thing from every page — which is what the slug being the
+address space buys you.
+
+Numbering earns its place in writing that behaves like a paper. For notes meant
+to be recombined, prefer the link.

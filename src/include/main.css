@@ -322,6 +322,14 @@ span.taxon {
   margin-right: 0.5em;
 }
 
+/* Sections without a taxon still emit the element, so without this an index
+   page shows an empty bordered pill wherever it is linked or listed. The
+   :empty pseudo-class outranks the more specific header rule below, so this
+   covers page headers and inline listings alike. */
+.taxon:empty {
+  display: none;
+}
+
 .title {
   font-family: var(--heading-font-family);
   font-style: italic;
@@ -358,10 +366,6 @@ article>section>details>summary>header>h1>.taxon {
   font-size: var(--article-details-h1-taxon-font-size);
   color: var(--article-taxon-color);
   padding-bottom: 5pt;
-}
-
-article>section>details>summary>header>h1>.taxon:empty {
-  display: none;
 }
 
 section.block>details {
