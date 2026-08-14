@@ -236,8 +236,7 @@ fn sync_script_file(script_content: &str, name: &str) -> eyre::Result<()> {
 /// output directory [`config::output_dir()`].
 fn sync_assets_dir() -> eyre::Result<bool> {
     let asset_dir = environment::assets_dir();
-    let asset_name = asset_dir
-        .file_name()
+    let asset_name = environment::assets_dir_name()
         .ok_or_else(|| eyre!("invalid assets directory path: {}", asset_dir))?;
     let target = environment::output_dir().join(asset_name);
 

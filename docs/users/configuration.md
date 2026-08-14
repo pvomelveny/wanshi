@@ -16,7 +16,10 @@ themes = []
 ```
 
 - `trees`: source directory for `.typ` sections.
-- `assets`: static assets directory copied into the output.
+- `assets`: static assets directory copied into the output, under the same
+  directory name. Renaming it moves both the copied files and the links wanshi
+  generates into them, so it is the way to avoid a clash when another site owns
+  a directory of that name — see [Sharing an output directory](publishing-and-workflows.md#sharing-an-output-directory).
 - `base-url`: URL prefix used for generated links. Use `/` for root-relative local output, or an absolute `https://.../` URL for RSS publishing.
 - `theme-lock`: hides the theme picker when true. **Defaults to `true` in wanshi**, because wanshi ships exactly one design and the picker would otherwise be empty. Set it to `false` if you add entries to `themes`.
 - `themes`: list of HTML fragment files, resolved from the project root, whose contents are inlined into the theme picker. See [Themes](#themes) below.

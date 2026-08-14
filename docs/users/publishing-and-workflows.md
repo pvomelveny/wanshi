@@ -70,14 +70,32 @@ Point the output at a subdirectory of the site you already publish:
 output = "../mysite/public/notes"
 ```
 
+`output` is a filesystem path, unrelated to `base-url` — the first says where
+files are written, the second only prefixes the links inside them. Set both when
+the notes live under a subdirectory.
+
+### Sharing an output directory
+
 **wanshi will not disturb the rest of that directory.** It records the pages it
 generates and removes only those, so files belonging to the host site are left
 alone even when they sit beside wanshi's own output.
 
-**One exception, and it deletes things: `<output>/assets/`.** That directory is a
-mirror of your project's `assets/`, so anything the host site keeps there is
-removed on the next build. Keep the host's own files under a different
-directory name.
+**The assets directory is the one exception, and it deletes things.**
+`<output>/assets/` is kept as an exact mirror of your project's `assets/`:
+anything there that wanshi did not copy is removed on the next build. If the
+host site already publishes a directory of that name, its contents go with it —
+silently, and only that directory; the rest of the host's files are safe.
+
+Rename yours to avoid the clash entirely:
+
+```toml
+[wanshi]
+assets = "note-assets"
+```
+
+That moves the source directory, the copy target, and the links wanshi
+generates, all together. It is worth doing whenever `output` points at a
+directory you do not exclusively own.
 
 ### Matching the site's appearance
 

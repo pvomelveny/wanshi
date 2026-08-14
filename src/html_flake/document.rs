@@ -22,7 +22,6 @@ pub fn html_doc(
         toc_class.push("mobile-sticky-nav");
     }
 
-    let base_url = environment::base_url();
     let doc_type = "<!DOCTYPE html>";
 
     let nav_html = html_nav(toc_class, catalog_html);
@@ -32,7 +31,7 @@ pub fn html_doc(
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width">"#
             (format!("<title>{page_title}</title>"))
-            (format!(r#"<link rel="icon" href="{}assets/favicon.ico" />"#, base_url))
+            (html_favicon_link())
             (html_feed_link())
             (html_import_meta())
             (html_scripts())
@@ -189,6 +188,24 @@ pub fn html_nav(toc_class: Vec<&str>, catalog_html: &str) -> String {
     })
 }
 
+/// Favicon link, resolved against the configured assets directory.
+///
+/// Not hardcoded to `assets/`: the build publishes assets under whatever
+/// `[wanshi].assets` is named, so a hardcoded segment sends every page to a
+/// path wanshi does not write. Where a site's output shares a directory with
+/// another site, that path may well exist and belong to something else.
+fn html_favicon_link() -> String {
+    let Some(assets) = environment::assets_dir_name() else {
+        return String::new();
+    };
+
+    format!(
+        r#"<link rel="icon" href="{}{}/favicon.ico" />"#,
+        environment::base_url(),
+        assets,
+    )
+}
+
 /// Feed autodiscovery link.
 ///
 /// Without this the feed is published but unreachable: browsers and readers
@@ -282,6 +299,40 @@ mod tests {
             assert!(header < crumb, "header hook should precede the breadcrumb");
             assert!(crumb < grid, "breadcrumb should precede the grid");
             assert!(grid < footer, "footer hook should follow the grid");
+        });
+
+        let _ = fs::remove_dir_all(root.as_std_path());
+    }
+
+    #[test]
+    fn test_html_favicon_link_follows_the_configured_assets_directory() {
+        use std::fs;
+
+        let root = crate::test_io::case_dir("document-favicon-assets");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+        fs::write(
+            config_path.as_std_path(),
+            r#"
+[wanshi]
+assets = "note-assets"
+base-url = "/notes/"
+"#,
+        )
+        .unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            environment::init_environment(config_path.clone(), environment::BuildMode::Publish)
+                .unwrap();
+
+            let html = html_doc("Title", "", "body", "", "");
+
+            // The build copies assets to `<output>/note-assets`, so a link to
+            // `/notes/assets/` would point at a path wanshi never writes.
+            assert!(
+                html.contains(r#"<link rel="icon" href="/notes/note-assets/favicon.ico" />"#),
+                "favicon should follow [wanshi].assets"
+            );
         });
 
         let _ = fs::remove_dir_all(root.as_std_path());

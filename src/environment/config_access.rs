@@ -178,3 +178,14 @@ pub fn get_cache_dir() -> Utf8PathBuf {
 pub fn assets_dir() -> Utf8PathBuf {
     super::root_dir().join(assets_dir_without_root())
 }
+
+/// The single path segment the assets directory is published under.
+///
+/// The build copies `assets_dir()` to `<output>/<this>`, so every generated URL
+/// pointing into assets has to agree with it. Deriving both from one function
+/// keeps a renamed `[wanshi].assets` from moving the files out from under the
+/// links — which is how the favicon came to point at a directory that a host
+/// site, not wanshi, owns.
+pub fn assets_dir_name() -> Option<String> {
+    assets_dir().file_name().map(str::to_owned)
+}
