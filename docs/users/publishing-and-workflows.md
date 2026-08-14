@@ -36,12 +36,98 @@ wanshi build
 
 Then publish the configured `[build].output` directory.
 
-If your host serves the site under a subpath, configure:
+## Adding wanshi to an Existing Site
+
+wanshi does not need a site of its own. Its output is ordinary static files, so
+a notes section can live inside a site you already publish — a personal
+homepage, a project site, a docs build from another generator.
+
+### Choosing where it lives
+
+Everything hinges on one setting. `base-url` is the prefix wanshi puts in front
+of every link it generates, so it has to match the URL the notes will actually
+be served from.
 
 ```toml
 [wanshi]
-base-url = "/subpath/"
+base-url = "/notes/"                      # a subpath of an existing site
+base-url = "https://notes.example.com/"   # a subdomain of your own
 ```
+
+Use the absolute form if you publish a feed, which needs links that work away
+from your site.
+
+Everything generated goes through this: page links and breadcrumbs, `main.css`
+and `main.js`, the favicon, the feed and its autodiscovery link, and the search
+index the sidebar fetches. There is nothing to adjust by hand.
+
+### Sharing a directory with the host site
+
+Point the output at a subdirectory of the site you already publish:
+
+```toml
+[build]
+output = "../mysite/public/notes"
+```
+
+**wanshi will not disturb the rest of that directory.** It records the pages it
+generates and removes only those, so files belonging to the host site are left
+alone even when they sit beside wanshi's own output.
+
+**One exception, and it deletes things: `<output>/assets/`.** That directory is a
+mirror of your project's `assets/`, so anything the host site keeps there is
+removed on the next build. Keep the host's own files under a different
+directory name.
+
+### Matching the site's appearance
+
+wanshi ships one visual design. To bring it closer to an existing site, add
+`import-style.html` to your project root — its contents are appended to every
+page's `<head>`, after wanshi's own stylesheet, so plain CSS overrides anything:
+
+```html
+<style>
+  :root { --accent: #1a4b8c; }
+  body  { font-family: "Your Site Font", serif; }
+</style>
+```
+
+A `<link>` to a stylesheet you keep in `assets/` works equally well. See
+[Customizing the Page Head](configuration.md#customizing-the-page-head) for the
+other hooks.
+
+### Removing the external requests
+
+Generated pages fetch fonts from Google Fonts and, for KaTeX math, from a CDN.
+If the host site has a content security policy, or you would rather not depend
+on either, replace those wholesale:
+
+- `import-font.html` — replaces the font imports; point it at self-hosted fonts.
+- `import-math.html` — replaces the KaTeX imports. An **empty file** removes them
+  entirely, which is fine unless you use the `tex()` helper: Typst-native maths
+  is rendered at build time and needs no JavaScript.
+
+### What it will not do
+
+wanshi generates complete, standalone pages. There is **no hook for injecting
+markup into the page body**, so a shared header or navigation bar from the host
+site cannot be dropped into a wanshi page directly — every extension point is in
+the `<head>`.
+
+Two ways round it: style the pages to match with `import-style.html` and let the
+notes read as their own section, or post-process the generated HTML in your
+build pipeline if the pages truly must carry the host's chrome.
+
+### Building it alongside the rest
+
+The build is one command and needs only Typst — no server, no network:
+
+```sh
+wanshi check --strict && wanshi build
+```
+
+Run it before or after your main site build and copy the output into place, or
+have wanshi write straight there with `[build].output`.
 
 ## Publishing a Feed
 
