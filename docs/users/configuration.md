@@ -154,9 +154,11 @@ The placeholder text is configurable via `[text].search`.
 
 ## Customizing the Page Head
 
-wanshi ships one built-in design ("Parchment & walnut"), but you can adjust any
-part of the generated `<head>` without rebuilding the binary. Four optional files
-are read from the **project root** — next to `Wanshi.toml`, not inside `trees/`:
+wanshi ships one built-in design ("Parchment & walnut"), but you can adjust the
+generated page without rebuilding the binary. Six optional files are read from
+the **project root** — next to `Wanshi.toml`, not inside `trees/`.
+
+Four of them affect the `<head>`:
 
 | File | Default | Effect |
 | --- | --- | --- |
@@ -175,6 +177,35 @@ written to `main.css` in the output, so a `<style>` block here — or a `<link>`
 a stylesheet you place in `assets/` — can override any of it without touching the
 binary.
 
+### Page chrome
+
+The other two put your own markup inside `<body>`, which is what you want when
+wanshi's pages sit inside a larger site and need to carry its navigation:
+
+| File | Default | Effect |
+| --- | --- | --- |
+| `import-header.html` | empty | Inserted at the very top of `<body>`, above wanshi's breadcrumb. |
+| `import-footer.html` | empty | Inserted at the very end of `<body>`, below the content grid. |
+
+Both are inserted verbatim and sit **outside** `#grid-wrapper`, so they span the
+full page width and do not disturb the article/sidebar layout:
+
+```html
+<!-- import-header.html -->
+<nav class="site-nav">
+  <a href="/">Home</a>
+  <a href="/notes/">Notes</a>
+</nav>
+```
+
+Style them from `import-style.html`. wanshi applies none of its own rules to
+this markup beyond the page defaults, so anything you inject keeps whatever
+appearance your stylesheet gives it.
+
+Note that `import-footer.html` is site chrome, distinct from the per-note footer
+that carries backlinks and references — that one is controlled by
+`[wanshi].footer-mode` and lives inside the article.
+
 ## Themes
 
 `[wanshi].themes` is a legacy multi-theme hook, largely vestigial in wanshi since
@@ -189,7 +220,7 @@ Typst-rendered images to match.
 With `theme-lock = true` (the default), the picker is hidden with CSS regardless
 of what `themes` contains.
 
-Changes to theme files, and to the four `import-*.html` files above, are watched
+Changes to theme files, and to the six `import-*.html` files above, are watched
 by `wanshi serve` and trigger a rewrite of the whole site.
 
 ## Generated Artifacts

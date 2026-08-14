@@ -107,16 +107,37 @@ on either, replace those wholesale:
   entirely, which is fine unless you use the `tex()` helper: Typst-native maths
   is rendered at build time and needs no JavaScript.
 
+### Carrying the host site's navigation
+
+Two files, also in the project root, inject markup into the page body:
+
+- `import-header.html` — the very top of `<body>`, above wanshi's breadcrumb.
+- `import-footer.html` — the very end of `<body>`, below the content grid.
+
+Copy the host site's header markup into the first and its footer into the
+second, and a wanshi page reads as a page of that site rather than a neighbour
+of it:
+
+```html
+<!-- import-header.html -->
+<nav class="site-nav">
+  <a href="/">Home</a>
+  <a href="/notes/">Notes</a>
+  <a href="/about/">About</a>
+</nav>
+```
+
+Both sit outside `#grid-wrapper`, so they span the full width and leave the
+article/sidebar layout alone. Pair them with `import-style.html` for the CSS
+that styles them — and remember the markup is static, so anything the host
+generates per-page (an active-link highlight, a breadcrumb of its own) has to be
+handled with CSS or script rather than copied in.
+
 ### What it will not do
 
-wanshi generates complete, standalone pages. There is **no hook for injecting
-markup into the page body**, so a shared header or navigation bar from the host
-site cannot be dropped into a wanshi page directly — every extension point is in
-the `<head>`.
-
-Two ways round it: style the pages to match with `import-style.html` and let the
-notes read as their own section, or post-process the generated HTML in your
-build pipeline if the pages truly must carry the host's chrome.
+wanshi generates complete, standalone pages — it cannot emit a bare fragment for
+another generator to wrap in its own layout. If the host site must own the whole
+document, post-process the generated HTML in your build pipeline.
 
 ### Building it alongside the rest
 

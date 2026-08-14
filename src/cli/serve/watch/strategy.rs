@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 use camino::{Utf8Path, Utf8PathBuf};
 use notify::{EventKind, RecursiveMode};
 
+use crate::environment;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum MissingPathLevel {
     Hint,
@@ -106,15 +108,12 @@ pub(in crate::cli::serve) fn compose_watched_paths(
     config_file: Utf8PathBuf,
     theme_paths: Vec<Utf8PathBuf>,
 ) -> Vec<Utf8PathBuf> {
-    let mut watched_paths = vec![
-        trees_dir,
-        assets_dir,
-        config_file,
-        root_dir.join("import-meta.html"),
-        root_dir.join("import-style.html"),
-        root_dir.join("import-font.html"),
-        root_dir.join("import-math.html"),
-    ];
+    let mut watched_paths = vec![trees_dir, assets_dir, config_file];
+    watched_paths.extend(
+        environment::IMPORT_FILE_NAMES
+            .iter()
+            .map(|name| root_dir.join(name)),
+    );
     watched_paths.extend(theme_paths);
     watched_paths
 }
@@ -180,13 +179,8 @@ pub(super) fn fold_watch_change_lines(
 }
 
 fn is_optional_import_watch_path(path: &Utf8Path) -> bool {
-    matches!(
-        path.file_name(),
-        Some("import-meta.html")
-            | Some("import-style.html")
-            | Some("import-font.html")
-            | Some("import-math.html")
-    )
+    path.file_name()
+        .is_some_and(|name| environment::IMPORT_FILE_NAMES.contains(&name))
 }
 
 fn is_optional_missing_watch_path(path: &Utf8Path, assets_dir: &Utf8Path) -> bool {
@@ -240,10 +234,12 @@ mod tests {
         assert!(watched.contains(&trees));
         assert!(watched.contains(&assets));
         assert!(watched.contains(&config));
-        assert!(watched.contains(&root.join("import-meta.html")));
-        assert!(watched.contains(&root.join("import-style.html")));
-        assert!(watched.contains(&root.join("import-font.html")));
-        assert!(watched.contains(&root.join("import-math.html")));
+        for name in environment::IMPORT_FILE_NAMES {
+            assert!(
+                watched.contains(&root.join(name)),
+                "{name} should be watched"
+            );
+        }
         assert!(watched.contains(&theme));
     }
 
@@ -290,6 +286,12 @@ mod tests {
         )));
         assert!(is_optional_import_watch_path(Utf8Path::new(
             "site/import-style.html"
+        )));
+        assert!(is_optional_import_watch_path(Utf8Path::new(
+            "site/import-header.html"
+        )));
+        assert!(is_optional_import_watch_path(Utf8Path::new(
+            "site/import-footer.html"
         )));
         assert!(!is_optional_import_watch_path(Utf8Path::new(
             "site/themes/theme.html"

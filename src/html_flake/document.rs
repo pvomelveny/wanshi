@@ -48,8 +48,12 @@ pub fn html_doc(
             (html_import_style())
         }
         body {
+            // Above the breadcrumb, so a host site's navigation reads as the
+            // outermost chrome rather than something nested inside wanshi's.
+            (html_import_header())
             (header_html)
             (html_body_inner(&nav_html, article_inner, footer_html))
+            (html_import_footer())
         }
     });
     format!("{}\n{}", doc_type, html)
@@ -118,6 +122,14 @@ pub fn html_import_fonts() -> String {
 
 pub fn html_import_math() -> String {
     environment::import_math_html()
+}
+
+pub fn html_import_header() -> String {
+    environment::import_header_html()
+}
+
+pub fn html_import_footer() -> String {
+    environment::import_footer_html()
 }
 
 pub fn html_live_reload() -> String {
@@ -229,8 +241,72 @@ pub fn html_main_style() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{html_dynamic_css, html_live_reload};
+    use super::{html_doc, html_dynamic_css, html_live_reload};
     use crate::environment;
+
+    #[test]
+    fn test_html_doc_places_body_hooks_outside_the_content_grid() {
+        use std::fs;
+
+        let root = crate::test_io::case_dir("document-body-hooks");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+        fs::write(config_path.as_std_path(), "[wanshi]\n").unwrap();
+        fs::write(
+            root.join("import-header.html").as_std_path(),
+            "<nav id=\"host-nav\">host</nav>",
+        )
+        .unwrap();
+        fs::write(
+            root.join("import-footer.html").as_std_path(),
+            "<footer id=\"host-footer\">host</footer>",
+        )
+        .unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            environment::init_environment(config_path.clone(), environment::BuildMode::Publish)
+                .unwrap();
+
+            let html = html_doc("Title", "<header>crumb</header>", "body", "", "");
+
+            let header = html.find("host-nav").expect("header hook should render");
+            let crumb = html.find("crumb").expect("breadcrumb should render");
+            // Not bare `grid-wrapper`: the dynamic stylesheet names it in the
+            // head, long before the element itself appears.
+            let grid = html
+                .find(r#"id="grid-wrapper""#)
+                .expect("grid should render");
+            let footer = html.find("host-footer").expect("footer hook should render");
+
+            // The host's chrome wraps wanshi's, rather than nesting inside it.
+            assert!(header < crumb, "header hook should precede the breadcrumb");
+            assert!(crumb < grid, "breadcrumb should precede the grid");
+            assert!(grid < footer, "footer hook should follow the grid");
+        });
+
+        let _ = fs::remove_dir_all(root.as_std_path());
+    }
+
+    #[test]
+    fn test_html_doc_omits_body_hooks_when_files_are_absent() {
+        use std::fs;
+
+        // `with_test_environment` rather than `mock_environment`: only the
+        // former holds the environment lock for the whole closure, and without
+        // it a sibling test's project root leaks in and supplies the hooks.
+        let root = crate::test_io::case_dir("document-body-hooks-absent");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            let html = html_doc("Title", "<header>crumb</header>", "body", "", "");
+
+            assert!(html.contains(r#"id="grid-wrapper""#));
+            assert!(!html.contains("host-nav"));
+            assert!(!html.contains("host-footer"));
+        });
+
+        let _ = fs::remove_dir_all(root.as_std_path());
+    }
 
     #[test]
     fn test_html_live_reload_disabled_outside_serve_mode() {
