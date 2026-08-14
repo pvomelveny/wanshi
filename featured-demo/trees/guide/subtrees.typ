@@ -68,7 +68,7 @@ Each is exactly `subtree` with the taxon filled in. The full set is
 use.
 
 #example(title: "The helper form")[
-  This block was written `#raw("#example(title: \"The helper form\")[ ... ]")`
+  This block was written `#example(title: "The helper form")[ ... ]`
   rather than as a `subtree` call with `taxon: "example"`. The output is
   identical.
 ]

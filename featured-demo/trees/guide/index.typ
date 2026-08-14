@@ -17,7 +17,7 @@ Two things follow from the name alone.
 #subtree(title: "It becomes the parent of its neighbours", taxon: "observation")[
   Every note in `trees/guide/` gets this page as its parent without declaring
   one. That is why the breadcrumb above each of them leads back here, and why
-  the listing below can be written as `#raw("#children()")` rather than by
+  the listing below can be written as `#children()` rather than by
   naming the notes.
 
   Precedence, when more than one candidate exists: an explicit `parent` in the
@@ -30,7 +30,7 @@ Two things follow from the name alone.
   no filename.
 
   The *slug* is still `guide/index`, and that is what links use:
-  `#raw("local(\"/guide/index\")")`. Writing `#raw("local(\"/guide\")")` is a
+  `local("/guide/index")`. Writing `local("/guide")` is a
   dangling link, because no note has that slug. The tidy URL is a rendering
   detail; the slug is the address.
 ]
