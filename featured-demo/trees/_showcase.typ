@@ -17,8 +17,8 @@
   doc
 }
 
-/// Label a worked example so the prose around it reads consistently.
-///
-/// `raw` maps onto `<pre><code>` in Typst's HTML export, so code samples come
-/// out as real code blocks rather than pictures of code.
-#let source(code) = raw(code.text, lang: "typst", block: true)
+// Code samples in this forest use plain backtick fences rather than a helper.
+// Backticks take their contents literally, so no quote or backslash needs
+// escaping; `raw()` is the function form, worth reaching for only when the text
+// or the language is computed rather than written out. Both produce the same
+// `<pre><code>` in Typst's HTML export.
