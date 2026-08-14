@@ -67,3 +67,49 @@ metadata still creates a backlink on its target.
 A taxon is a display category — `definition`, `remark`, `theorem`, `reference`.
 It carries no behaviour on its own, but listings can filter on it, which is how
 #local("/refs/index") collects its entries.
+
+=== They are free-form
+
+There is no fixed set. A taxon is an ordinary string, rendered with its first
+letter capitalised and a period appended. Invent one whenever the vocabulary you
+already have does not fit:
+
+```typst
+#metadata((
+  "title": "A note in the margin",
+  "taxon": "marginalia",
+))
+```
+
+The subtree below uses exactly that, and the listing under it finds it. Neither
+required registering the word anywhere.
+
+#subtree(slug: "marginalia", title: "A note in the margin", taxon: "marginalia")[
+  Tagged `marginalia`, a taxon this forest invented on the spot. It renders like
+  any other, and `by-taxon` treats it like any other.
+]
+
+#by-taxon("marginalia", title: "Everything tagged marginalia")
+
+The semantic helpers in #local("/guide/subtrees") — `#theorem`, `#definition`,
+and the rest — are *not* an enumeration of what is allowed. Each is a one-line
+wrapper that fills in `taxon:` on a `subtree` call, so `#theorem(..)` and
+`#subtree(taxon: "theorem", ..)` produce identical output. They save typing;
+they do not constrain.
+
+=== Two things to know
+
+#subtree(title: "`reference` is the one reserved word", taxon: "observation")[
+  Any taxon beginning with `reference` marks a note as a citation, which changes
+  where links to it are rendered — see #local("/guide/links"). Every other
+  taxon is inert: a label, and something listings can filter on.
+]
+
+#subtree(title: "Matching ignores case", taxon: "observation")[
+  `#by-taxon("MARGINALIA")` finds notes tagged `marginalia`. Capitalisation in
+  metadata is a display choice, not part of the identity.
+
+  What listings *cannot* see is a taxon on an anonymous subtree. Only sections
+  with slugs are addressable, so a taxon on a subtree without one labels the
+  heading and nothing more.
+]

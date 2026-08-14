@@ -20,6 +20,7 @@ access; everything else is offline.
 | --- | --- | --- |
 | Slugs, file layout, `_` prefix | `trees/guide/slugs.typ` | `/guide/slugs.html` |
 | Metadata keys, custom keys, links in metadata | `trees/guide/metadata.typ` | `/guide/metadata.html` |
+| Taxons, including inventing one | `trees/guide/metadata.typ` | `/guide/metadata.html` |
 | `local`, `external`, references, backlinks | `trees/guide/links.typ` | `/guide/links.html` |
 | `embed`, and its options | `trees/guide/embeds.typ` | `/guide/embeds.html` |
 | `subtree`, anonymous and named, semantic helpers | `trees/guide/subtrees.typ` | `/guide/subtrees.html` |
@@ -36,9 +37,11 @@ access; everything else is offline.
 
 - **`trees/_showcase.typ` and `trees/_lib/` produce no pages.** The leading
   underscore is the whole mechanism.
-- **`guide/subtrees-named.html` and `math/contraction.html` have no source
-  files.** Both are subtrees declared inside another note, promoted to pages by
-  being given a slug.
+- **`guide/subtrees-named.html`, `guide/marginalia.html`, and
+  `math/contraction.html` have no source files.** All three are subtrees
+  declared inside another note, promoted to pages by being given a slug.
+- **`marginalia` is a taxon this forest invented**, registered nowhere, and
+  `by-taxon` finds it anyway.
 - **`/guide/` and `/refs/` are directory URLs**, served without a filename,
   while their slugs remain `guide/index` and `refs/index`. Links use the slug.
 
