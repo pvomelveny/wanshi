@@ -140,5 +140,40 @@ The alternative is the one #local("/guide/links") describes. Writing
 and means the same thing from every page — which is what the slug being the
 address space buys you.
 
+=== The two combine, and that is the arrangement to want
+
+They are orthogonal, so there is no choice to make between them:
+
+- `numbering` affects *display*, on the page rendering the block and in that
+  page's table of contents.
+- `local` links by *slug*, and renders the target's title.
+
+The definition above shows as `Definition 1.` while the link to it a paragraph
+ago rendered as "Contraction". Insert another statement above it and the
+displayed number shifts; the link does not change at all, because nothing about
+it ever mentioned a number. Numbers for reading, slugs for referring.
+
+#subtree(title: "The number does not travel with the note", taxon: "observation")[
+  #local("/math/contraction") is `Definition 1.` here, and on its own page it is
+  plain `Definition.` — no number at all. The counter belongs to the page doing
+  the rendering, so there is no such thing as *the* number of a note, only its
+  number in one place.
+
+  This is worth sitting with before writing "as we saw in Definition 1": read
+  somewhere else, that sentence is pointing at nothing.
+]
+
+#subtree(title: "A link cannot show a live number", taxon: "observation")[
+  There is no way to make a link render as `Definition 1` and keep it correct.
+  The `text:` override takes a fixed string:
+
+  ```typst
+  #local("/math/contraction", text: "Definition 1")
+  ```
+
+  That is typed by hand, so it is exactly what goes stale when a statement is
+  inserted above. Use `text:` to fix grammar, never to restate a number.
+]
+
 Numbering earns its place in writing that behaves like a paper. For notes meant
 to be recombined, prefer the link.
