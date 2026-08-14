@@ -114,6 +114,43 @@ A `<link>` to a stylesheet you keep in `assets/` works equally well. See
 [Customizing the Page Head](configuration.md#customizing-the-page-head) for the
 other hooks.
 
+### Using the host site's favicon
+
+wanshi links `<assets>/favicon.ico` on every page and ships a default icon, so
+an embedded set of notes will show wanshi's icon rather than the host's until
+you change it. Three ways, in increasing order of indirection:
+
+**Copy the host's icon over wanshi's.** Simplest, and the right answer if the
+icon rarely changes:
+
+```sh
+cp ../mysite/static/favicon.ico assets/favicon.ico
+```
+
+**Symlink it,** to keep one source of truth. The build follows the link and
+publishes a real file, and a later change to the host's icon is picked up on the
+next build:
+
+```sh
+ln -sf ../../mysite/static/favicon.ico assets/favicon.ico
+```
+
+**Or link the host's existing URL** from `import-meta.html`, leaving the file
+alone entirely:
+
+```html
+<link rel="icon" href="/favicon.ico" />
+```
+
+That hook renders after wanshi's own icon link, and the HTML standard requires a
+browser to use the last equally appropriate icon declared, so the host's wins.
+Do not set `sizes` on it unless wanshi's icon carries one too — differing sizes
+change how the browser chooses, and the last-declared rule no longer applies.
+
+Prefer one of the first two if you can. The third leaves two icon links in the
+head and a wanshi icon published but unused, which is harmless but puzzling to
+whoever reads the markup next.
+
 ### Removing the external requests
 
 Generated pages fetch fonts from Google Fonts and, for KaTeX math, from a CDN.

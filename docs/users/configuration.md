@@ -180,6 +180,27 @@ written to `main.css` in the output, so a `<style>` block here — or a `<link>`
 a stylesheet you place in `assets/` — can override any of it without touching the
 binary.
 
+### Favicon
+
+Every page links an icon from the assets directory, and `wanshi new site` ships
+one so the link is never left dangling. **To change it, replace the file:**
+
+```sh
+cp my-icon.ico assets/favicon.ico
+```
+
+The name is fixed — pages always link `<assets>/favicon.ico` — but the directory
+follows `[wanshi].assets`, so renaming that moves the link with it. An `.ico`
+holding several sizes (16, 32, 48) lets the browser pick per context; a
+single-size file works too.
+
+**Do not simply delete it.** The link is emitted unconditionally, so removing
+the file leaves every page requesting one that is not there. If you want no
+icon, keep a file at that path rather than removing it.
+
+To point at an icon the surrounding site already publishes, see
+[Using the host site's favicon](publishing-and-workflows.md#using-the-host-sites-favicon).
+
 ### Page chrome
 
 The other two put your own markup inside `<body>`, which is what you want when
