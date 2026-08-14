@@ -162,7 +162,10 @@ mod tests {
 
             // The trailing slash matters: without it a relative reference from
             // the page would resolve against the parent directory.
-            assert_eq!(full_html_url(Slug::new("notes/index")), format!("{base}notes/"));
+            assert_eq!(
+                full_html_url(Slug::new("notes/index")),
+                format!("{base}notes/")
+            );
             assert_eq!(
                 full_html_url(Slug::new("notes/deep/index")),
                 format!("{base}notes/deep/")

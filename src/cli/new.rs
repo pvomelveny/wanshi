@@ -246,8 +246,8 @@ mod tests {
 
     #[test]
     fn test_normalize_new_section_path_appends_typ_when_missing_extension() {
-        let path = normalize_new_section_path(Utf8Path::new("notes/foo"))
-            .expect("should normalize path");
+        let path =
+            normalize_new_section_path(Utf8Path::new("notes/foo")).expect("should normalize path");
 
         assert_eq!(path, Utf8PathBuf::from("notes/foo.typ"));
     }

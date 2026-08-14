@@ -90,13 +90,7 @@ fn parse_typst_html(
                 let mut val = if let Some(value) = span.attrs.get("value") {
                     HTMLContent::Plain(value.to_string())
                 } else {
-                    parse_typst_html(
-                        ctx,
-                        span.body,
-                        current_slug,
-                        &mut OrderedMap::new(),
-                        false,
-                    )?
+                    parse_typst_html(ctx, span.body, current_slug, &mut OrderedMap::new(), false)?
                 };
                 if key == "taxon" {
                     if let HTMLContent::Plain(v) = val {
@@ -377,7 +371,8 @@ mod tests {
 <p>root</p>
 <wanshi-subtree slug="child" title="Child" numbering="true"><p>child</p></wanshi-subtree>
 "#;
-        let sections = parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
+        let sections =
+            parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
         assert_eq!(sections.len(), 2);
 
         let root = find_section(&sections, Slug::new("book/index"));
@@ -442,7 +437,8 @@ mod tests {
 <p>child</p>
 </wanshi-subtree>
 "#;
-        let sections = parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
+        let sections =
+            parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
         let root = find_section(&sections, Slug::new("book/index"));
         let root_contents = match &root.content {
             HTMLContent::Lazy(contents) => contents,
@@ -474,7 +470,8 @@ mod tests {
 <p>root</p>
 <wanshi-subtree title="Anonymous"><p>child</p></wanshi-subtree>
 "#;
-        let sections = parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
+        let sections =
+            parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
         assert_eq!(sections.len(), 2);
 
         let root = find_section(&sections, Slug::new("book/index"));
@@ -512,7 +509,8 @@ mod tests {
   <wanshi-subtree slug="child"><p>nested</p></wanshi-subtree>
 </wanshi-subtree>
 "#;
-        let sections = parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
+        let sections =
+            parse_typst_sections_from_html(Slug::new("book/index"), Ext::Typst, html).unwrap();
         assert!(sections
             .iter()
             .any(|(slug, _)| *slug == Slug::new("book/child")));

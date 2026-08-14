@@ -272,7 +272,10 @@ mod tests {
             let removed = prune_removed(&previous, &BTreeSet::new()).unwrap();
 
             assert!(removed.is_empty());
-            assert!(outsider.exists(), "pruning must never escape the output dir");
+            assert!(
+                outsider.exists(),
+                "pruning must never escape the output dir"
+            );
         });
     }
 

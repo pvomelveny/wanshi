@@ -478,10 +478,10 @@ mod tests {
             HTMLContent::Plain("notes/algebra".to_string()),
         );
         if container_is_collection {
-            container
-                .metadata
-                .0
-                .insert(KEY_COLLECT.to_string(), HTMLContent::Plain("true".to_string()));
+            container.metadata.0.insert(
+                KEY_COLLECT.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
         }
         shallows.insert(Slug::new("notes/algebra"), container);
 

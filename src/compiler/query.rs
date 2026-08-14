@@ -95,7 +95,10 @@ fn substitute(section: &mut Section, rendered: &HashMap<String, String>) {
     for content in &mut section.children {
         match content {
             SectionContent::Query(spec) => {
-                let html = rendered.get(&spec_cache_key(spec)).cloned().unwrap_or_default();
+                let html = rendered
+                    .get(&spec_cache_key(spec))
+                    .cloned()
+                    .unwrap_or_default();
                 *content = SectionContent::Plain(html);
             }
             SectionContent::Embed(child) => substitute(child, rendered),
@@ -289,9 +292,10 @@ fn hit(state: &CompileState, slug: Slug) -> Option<QueryHit> {
 fn sort_hits(hits: &mut [QueryHit], spec: &QuerySpec) {
     let key = spec.sort.trim();
     hits.sort_by(|left, right| {
-        let ordering = footer_sort::compare_values(key, &sort_value(left, key), &sort_value(right, key))
-            // Slug breaks ties so output stays stable across builds.
-            .then_with(|| left.slug.cmp(&right.slug));
+        let ordering =
+            footer_sort::compare_values(key, &sort_value(left, key), &sort_value(right, key))
+                // Slug breaks ties so output stays stable across builds.
+                .then_with(|| left.slug.cmp(&right.slug));
         match spec.order {
             QueryOrder::Ascending => ordering,
             QueryOrder::Descending => ordering.reverse(),
@@ -503,13 +507,22 @@ mod tests {
         let state = compile_all_without_missing_index_warning(&shallows).unwrap();
         let found = slugs_of(&state, &spec("notes/deep/carol", QueryScope::Orphans));
 
-        assert!(!found.iter().any(|s| s == "index"), "root is never orphaned");
-        assert!(!found.iter().any(|s| s == "stray"), "embedded, so reachable");
+        assert!(
+            !found.iter().any(|s| s == "index"),
+            "root is never orphaned"
+        );
+        assert!(
+            !found.iter().any(|s| s == "stray"),
+            "embedded, so reachable"
+        );
         assert!(
             !found.iter().any(|s| s == "notes/bob"),
             "linked to, so reachable"
         );
-        assert!(!found.iter().any(|s| s == "notes/deep/carol"), "is the owner");
+        assert!(
+            !found.iter().any(|s| s == "notes/deep/carol"),
+            "is the owner"
+        );
         assert!(found.iter().any(|s| s == "notes/alice"));
     }
 
@@ -543,7 +556,10 @@ mod tests {
         let mut orphans = spec("stray", QueryScope::Orphans);
         orphans.include_indexes = false;
         let found = slugs_of(&state, &orphans);
-        assert!(!found.iter().any(|s| s.ends_with("index")), "got: {found:?}");
+        assert!(
+            !found.iter().any(|s| s.ends_with("index")),
+            "got: {found:?}"
+        );
         assert!(found.iter().any(|s| s == "notes/alice"), "got: {found:?}");
 
         // The option is a general filter, not special-cased to orphans.

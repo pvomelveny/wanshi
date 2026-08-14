@@ -43,7 +43,10 @@ pub fn should_ignore_dir(path: &Utf8Path) -> bool {
 pub fn is_section_source_path(relative: &Utf8Path) -> bool {
     Ext::is_source_extension(relative.extension())
         && !should_ignore_file(relative)
-        && relative.ancestors().skip(1).all(|dir| !should_ignore_dir(dir))
+        && relative
+            .ancestors()
+            .skip(1)
+            .all(|dir| !should_ignore_dir(dir))
 }
 
 fn to_slug_ext(source_dir: &Utf8Path, p: &Utf8Path) -> Option<(Slug, Ext)> {
