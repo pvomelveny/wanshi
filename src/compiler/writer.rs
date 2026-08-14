@@ -30,7 +30,11 @@ impl Writer {
         let filepath = crate::environment::output_path(&relative_path);
 
         match verify_update_hash(&relative_path, &html) {
-            Ok(true) => match std::fs::write(&filepath, html) {
+            // The hash records what was written, not what is still there, so a
+            // matching hash alone does not mean the page exists: deleting the
+            // output directory and rebuilding would otherwise produce a site
+            // with no pages at all, and report success.
+            Ok(changed) if changed || !filepath.exists() => match std::fs::write(&filepath, html) {
                 Ok(()) => {
                     if *crate::cli::build::verbose() {
                         color_print::ceprintln!("<g>[build]</> {:?} {}", page_title, filepath);
@@ -38,7 +42,7 @@ impl Writer {
                 }
                 Err(err) => color_print::ceprintln!("<r>{:?}</>", err),
             },
-            Ok(false) => {
+            Ok(_) => {
                 if *crate::cli::build::verbose_skip() {
                     color_print::ceprintln!("<dim>[skip]</> {} (unchanged)", relative_path);
                 }
@@ -463,6 +467,32 @@ mod tests {
             .0
             .insert("date".to_string(), HTMLContent::Plain(date.to_string()));
         section
+    }
+
+    #[test]
+    fn test_write_restores_a_page_deleted_from_the_output() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            shallows.insert(Slug::new("a"), shallow_section("a", "A"));
+
+            let state = compile_all(&shallows).unwrap();
+            let section = state.compiled().get(&Slug::new("a")).unwrap();
+            let filepath = crate::environment::output_path("a.html");
+            std::fs::create_dir_all(filepath.parent().unwrap()).unwrap();
+
+            Writer::write(section, &state).unwrap();
+            assert!(filepath.exists(), "first write should create the page");
+
+            // The content hash is now current, so a writer that trusted it
+            // alone would leave the output missing and still report success.
+            std::fs::remove_file(&filepath).unwrap();
+            Writer::write(section, &state).unwrap();
+
+            assert!(
+                filepath.exists(),
+                "a page removed from the output should be rewritten"
+            );
+        });
     }
 
     #[test]
