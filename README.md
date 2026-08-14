@@ -4,6 +4,26 @@ A Typst-only static Zettelkästen site generator.
 
 wanshi is a fork of [kodama](https://github.com/kodama-community/kodama) (see `NOTICE.md`).
 
+## Status: a personal project
+
+**wanshi is built primarily for its author's own use.** It is public because the
+license requires it and because the code may be useful to read, not because it
+is looking for users. In practice that means:
+
+- No stability guarantees. Configuration keys, the Typst library API, and output
+  markup change whenever it suits the author, without deprecation periods.
+- Features exist because they were needed, not to round out a feature matrix.
+  Gaps are gaps, and there is no roadmap for closing them.
+- Issues and pull requests may go unanswered. Forking is welcome and probably
+  the better option if you want something changed.
+
+**If you want a maintained tool of this kind, use
+[kodama](https://github.com/kodama-community/kodama)** — the upstream project
+this was forked from. It has a community, a release cadence, and support for
+Markdown alongside Typst. wanshi drops Markdown entirely, replaces the visual
+design, and diverges in ways that suit one person's notes; none of that is an
+improvement in general, just a different set of choices.
+
 ## Features
 
 - Single binary, command-line program.
