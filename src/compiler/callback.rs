@@ -60,9 +60,14 @@ impl Callback {
                     // First parent to be inferred wins.
                     (None, incoming) => existed.parent = incoming,
                     (Some(_), None) => {}
+                    // Embedding the same section in several places is a
+                    // legitimate thing to do — a shared definition, say — but
+                    // only one of them can be the parent, and which one is
+                    // decided by compilation order rather than by anything the
+                    // author intended. Say so, and say how to decide it.
                     (Some(current), Some(incoming)) if current != incoming => {
                         color_print::ceprintln!(
-                            "<y>Warning: Multiple parents for `{}`: `{}` and `{}`. Using {}.</>",
+                            "<y>Warning: `{}` is embedded in both `{}` and `{}`; using `{}` as its parent.\n         Set `\"parent\"` in its metadata to choose deliberately.</>",
                             child_slug,
                             current,
                             incoming,
