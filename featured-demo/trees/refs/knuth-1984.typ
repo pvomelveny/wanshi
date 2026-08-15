@@ -9,6 +9,9 @@
   "date": "1984-05-01",
   "author": "Donald E. Knuth",
   "asref": "true",
+  // As with the other reference here: embedded by `guide/embeds`, so the
+  // parent is declared to keep it filed under References.
+  "parent": "refs/index",
 ))
 
 _The Computer Journal_ *27*(2), 97–111.

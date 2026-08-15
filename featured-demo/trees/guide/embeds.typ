@@ -37,10 +37,48 @@ Collapsed, with no catalog entry:
 
 == Embedding and parents
 
-Embedding a note makes the embedding page its parent, unless the note declares a
-`parent` of its own or sits beside a directory index that already claims it.
-That is worth knowing before embedding widely: it silently rearranges the
-breadcrumb trail.
+Embedding a note makes the embedding page its parent. That is the part worth
+knowing before embedding widely, because it rearranges the breadcrumb trail
+without saying so.
+
+Both notes embedded above are references, and both would otherwise have been
+filed under *this* page — a reference note reached by a trail through the guide.
+Follow #local("/refs/typst") and the breadcrumb reads *References*, because it
+declares one:
+
+```typst
+#metadata((
+  "title": "Typst",
+  "taxon": "reference",
+  "parent": "refs/index",
+))
+```
+
+An explicit `parent` beats an embedding one and never loses to it.
+
+=== Embedding the same note in several places
+
+Nothing stops it, and it is often the point — a definition used by three
+arguments should be written once and shown in all three. Each page renders it in
+full, and it stays a note of its own with its own URL.
+
+But a note has exactly one parent, because the breadcrumb is a single trail. So
+when several pages embed the same note and it declares no parent, one embedder
+is chosen and the rest are not represented. Which one wins follows compilation
+order, not intent — renaming an unrelated file can move it. wanshi warns:
+
+```
+Warning: `shared-def` is embedded in both `alpha` and `beta`; using `alpha` as its parent.
+         Set `"parent"` in its metadata to choose deliberately.
+```
+
+Declaring the parent is the whole fix. It silences the warning, pins the
+breadcrumb where it belongs, and changes nothing about the embedding — every
+page still shows the note in full.
+
+The one-parent rule only constrains the breadcrumb. Backlinks stay many-to-many,
+so all the embedding pages remain visible from the note regardless of which one
+became its parent.
 
 == When to embed instead of writing inline
 

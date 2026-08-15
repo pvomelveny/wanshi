@@ -8,6 +8,10 @@
   "taxon": "reference",
   "date": "2023-03-21",
   "asref": "true",
+  // Declared because `guide/embeds` embeds this note, and embedding otherwise
+  // makes the embedding page the parent — which would file a reference under
+  // the guide. See that note's "Embedding and parents".
+  "parent": "refs/index",
 ))
 
 The markup-based typesetting system every note here is written in. wanshi shells
