@@ -139,6 +139,10 @@ body {
 pre,
 code {
   font-optical-sizing: auto;
+  /* `hyphens: auto` on the body suits prose but not identifiers: a path
+     wrapping in a narrow column came out as `slugs.-typ`, implying a hyphen
+     that is not in the name. */
+  hyphens: none;
 }
 
 p,
