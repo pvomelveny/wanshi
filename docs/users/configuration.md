@@ -168,12 +168,16 @@ Four of them affect the `<head>`:
 | `import-meta.html` | empty | Appended to the head. Use for favicons, Open Graph tags, analytics. |
 | `import-style.html` | empty | Appended to the head. Use for a `<style>` block or an extra stylesheet that overrides `main.css`. |
 | `import-font.html` | bundled Google Fonts link (Playfair Display, Source Serif 4, Fira Code) | **Replaces** the built-in font imports. Use to self-host fonts or drop the CDN dependency. |
-| `import-math.html` | bundled KaTeX CSS/JS with auto-render | **Replaces** the built-in math imports. Use to pin a KaTeX version, self-host it, or disable KaTeX entirely with an empty file. |
+| `import-math.html` | empty | Appended to the head. Holds the KaTeX loader, if you want one — `wanshi snip --katex` writes it. Only needed for the `tex()` helper; ordinary equations are MathML and need nothing. |
 
-The first two add to the defaults; the last two override them, so copy the
-bundled content out of the wanshi source before editing if you only want a
-tweak. Overriding `import-math.html` with an empty file is the supported way to
-drop the KaTeX dependency — Typst-native math (the default) does not need it.
+Three of them are appended to whatever wanshi already emits. `import-font.html`
+is the exception: it **replaces** the built-in font links, so copy the bundled
+content out of the wanshi source before editing if you only want a tweak.
+
+Nothing here is needed to render mathematics. Equations are MathML, which the
+browser lays out on its own; `import-math.html` exists for the `tex()` helper,
+which hands TeX source to KaTeX instead. A site with no such file makes no
+requests to a maths CDN at all.
 
 `import-style.html` is the right hook for restyling. wanshi's own stylesheet is
 written to `main.css` in the output, so a `<style>` block here — or a `<link>` to

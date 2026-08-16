@@ -153,14 +153,14 @@ whoever reads the markup next.
 
 ### Removing the external requests
 
-Generated pages fetch fonts from Google Fonts and, for KaTeX math, from a CDN.
-If the host site has a content security policy, or you would rather not depend
-on either, replace those wholesale:
+A generated page fetches one thing: fonts, from Google Fonts. Mathematics is
+MathML and needs no library, so there is no maths CDN to remove unless you added
+one yourself with `wanshi snip --katex` for the `tex()` helper.
 
-- `import-font.html` — replaces the font imports; point it at self-hosted fonts.
-- `import-math.html` — replaces the KaTeX imports. An **empty file** removes them
-  entirely, which is fine unless you use the `tex()` helper: Typst-native maths
-  is rendered at build time and needs no JavaScript.
+To drop the remaining dependency, put self-hosted font faces in
+`import-font.html`, which replaces the built-in links. A site is then entirely
+self-contained, which is worth checking if the host site has a content security
+policy.
 
 ### Carrying the host site's navigation
 

@@ -35,9 +35,19 @@ pub fn import_fonts_html() -> String {
         .unwrap_or_else(|_| DEFAULT_IMPORT_FONT_HTML.to_string())
 }
 
+/// KaTeX loader, absent unless the site asks for it.
+///
+/// Equations are MathML, which the browser renders without help, so loading
+/// KaTeX by default would put two CDN requests and a render-blocking stylesheet
+/// on every page for the benefit of the `tex()` helper alone. Sites that use
+/// `tex()` opt in with `wanshi snip --katex`, which writes the loader.
 pub fn import_math_html() -> String {
-    fs::read_to_string(super::root_dir().join("import-math.html"))
-        .unwrap_or_else(|_| DEFAULT_IMPORT_MATH_HTML.to_string())
+    fs::read_to_string(super::root_dir().join("import-math.html")).unwrap_or_default()
+}
+
+/// The bundled KaTeX loader, written into a project by `wanshi snip --katex`.
+pub fn default_import_math_html() -> &'static str {
+    DEFAULT_IMPORT_MATH_HTML
 }
 
 /// Markup placed at the very top of `<body>`, above wanshi's own breadcrumb.

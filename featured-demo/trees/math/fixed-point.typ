@@ -71,9 +71,18 @@ browser:
 #tex(`\frac{q^n}{1-q} d(x_1, x_0)`)
 ```
 
-#tex(`\frac{q^n}{1-q} d(x_1, x_0)`) — useful when pasting TeX from elsewhere,
-at the cost of a CDN dependency. Native Typst maths is the better default;
-`import-math.html` can drop KaTeX entirely if you never use `tex`.
+#tex(`\frac{q^n}{1-q} d(x_1, x_0)`) — useful when pasting TeX from elsewhere.
+
+KaTeX is not loaded unless a site asks for it, so `tex` renders nothing until
+you run
+
+```sh
+wanshi snip --katex
+```
+
+which writes the loader into `import-math.html`. This forest has done that,
+which is the only reason the formula above appears. A site that never uses `tex`
+makes no request to a maths CDN at all.
 
 == Diagrams
 

@@ -40,5 +40,29 @@ fn katex_snippets() -> eyre::Result<()> {
     std::fs::write(&snippets_path, json)
         .wrap_err_with(|| format!("failed to write snippets to `{}`", snippets_path))?;
 
+    write_katex_loader()?;
+
+    Ok(())
+}
+
+/// Install the KaTeX loader, which is what actually makes `tex()` render.
+///
+/// Snippets alone would produce TeX that nothing renders: equations are MathML
+/// and need no loader, so pages carry none until a site asks for one.
+fn write_katex_loader() -> eyre::Result<()> {
+    let loader_path = environment::root_dir().join("import-math.html");
+
+    if loader_path.exists() {
+        color_print::ceprintln!(
+            "<y>Note: `{}` already exists; leaving it alone.</>",
+            loader_path
+        );
+        return Ok(());
+    }
+
+    std::fs::write(&loader_path, environment::default_import_math_html())
+        .wrap_err_with(|| format!("failed to write KaTeX loader to `{}`", loader_path))?;
+    color_print::ceprintln!("<g>[snip]</> wrote {}", loader_path);
+
     Ok(())
 }

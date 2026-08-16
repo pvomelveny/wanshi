@@ -294,13 +294,16 @@ correspondence, wrap the equation in `auto-frame` to force the Typst-rendered
 SVG for that one formula.
 
 For KaTeX-rendered math instead, `tex()` wraps a raw string in `$…$` delimiters
-for the bundled KaTeX auto-render pass:
+for a KaTeX auto-render pass:
 
 ```typst
 #tex(`\frac{1}{2}`)
 ```
 
-Generate VS Code snippets for KaTeX with `wanshi snip --katex`.
+KaTeX is **opt-in**. Nothing loads it by default, so `tex()` renders nothing
+until you run `wanshi snip --katex`, which writes both the VS Code snippets and
+the `import-math.html` loader. Reach for it when pasting TeX from elsewhere; for
+mathematics you are writing yourself, Typst syntax needs no library.
 
 ### Constants
 

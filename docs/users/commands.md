@@ -9,7 +9,7 @@ wanshi commands accept the usual `--help` flag. Most commands also have visible 
 | `wanshi build` | `b` | Compile the site to HTML |
 | `wanshi check` | `c` | Validate sections and graph without writing output |
 | `wanshi serve` | `s` | Preview locally with watch and live reload |
-| `wanshi snip` | — | Generate VS Code snippet files |
+| `wanshi snip` | — | Set a project up for KaTeX (`tex()` helper) |
 | `wanshi upgrade` | `u` | Upgrade config shape and sync the Typst library |
 
 ## `wanshi new`
@@ -133,12 +133,15 @@ rebuild — a tool can watch it instead of parsing events.
 wanshi snip --katex
 ```
 
-Generates VS Code snippet files in `.vscode/`.
+Sets a project up for KaTeX, which is only needed for the `tex()` helper —
+ordinary equations are MathML and render without any library.
 
 Options:
 
 - `--config <path>`, short `-c`: configuration file.
-- `--katex`, short `-k`: write `.vscode/katex.code-snippets`.
+- `--katex`, short `-k`: write `.vscode/katex.code-snippets` **and**
+  `import-math.html`, the loader that makes `tex()` actually render. An existing
+  `import-math.html` is left alone, so the command is safe to re-run.
 
 `--katex` is currently the only generator, and the command does nothing without
 it. (Upstream kodama also shipped Markdown section snippets; wanshi is

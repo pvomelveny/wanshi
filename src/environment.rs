@@ -31,8 +31,8 @@ pub use config_access::{
 };
 pub use hashing::{verify_and_file_hash, verify_update_hash};
 pub use imports::{
-    import_fonts_html, import_footer_html, import_header_html, import_math_html, import_meta_html,
-    import_style_html, IMPORT_FILE_NAMES,
+    default_import_math_html, import_fonts_html, import_footer_html, import_header_html,
+    import_math_html, import_meta_html, import_style_html, IMPORT_FILE_NAMES,
 };
 pub use paths::{
     create_parent_dirs, entry_dir, entry_file_path, full_html_url, full_url, hash_dir,
