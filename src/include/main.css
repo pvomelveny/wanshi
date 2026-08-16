@@ -626,7 +626,12 @@ body>header {
        rather than on the grid itself, or they would drift out of line with the
        article. */
     margin-inline: auto;
-    max-width: 1180px;
+    /* Grows in step with the article, rather than being fixed. A fixed cap
+       meant the article's extra width came straight out of the sidebar, so a
+       wider window made the table of contents narrower — and past about
+       1500px its entries began wrapping for want of room that the window
+       plainly had. The addend covers the sidebar, the gap, and the gutters. */
+    max-width: calc(var(--article-max-width) + 33rem);
     padding-inline: 2rem;
     box-sizing: border-box;
     transition: ease all 0.2s;
