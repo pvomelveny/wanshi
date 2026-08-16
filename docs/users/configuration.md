@@ -253,6 +253,12 @@ of what `themes` contains.
 Changes to theme files, and to the six `import-*.html` files above, are watched
 by `wanshi serve` and trigger a rewrite of the whole site.
 
+**Creating one of these files while `serve` is running is not noticed.** A file
+that does not exist cannot be watched, so `serve` skips it at startup — it says
+so, as a hint — and never learns it appeared. Restart `serve` after adding a
+hook for the first time. Editing it thereafter reloads normally, which is what
+makes the omission easy to misread as the file having no effect.
+
 ## Generated Artifacts
 
 Depending on command flags and configuration, wanshi writes:

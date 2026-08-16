@@ -111,6 +111,10 @@ wanshi serve
 
 Builds the site into the serve output directory, starts the configured static server, watches source/config/theme/assets files, and rebuilds on changes.
 
+An `import-*.html` hook that does not exist when `serve` starts cannot be
+watched, so **creating one mid-session has no effect until you restart** — see
+[Customizing the Page Head](configuration.md#customizing-the-page-head).
+
 Options:
 
 - `--config <path>`, short `-c`: configuration file.
