@@ -4,12 +4,12 @@ wanshi commands accept the usual `--help` flag. Most commands also have visible 
 
 | Command | Alias | Purpose |
 | --- | --- | --- |
-| `wanshi new` | `n` | Create a site, config file, or note |
+| `wanshi new` | `n` | Create a site, config file, note, or KaTeX loader |
 | `wanshi init` | `i` | Initialize an existing directory as a site |
 | `wanshi build` | `b` | Compile the site to HTML |
 | `wanshi check` | `c` | Validate sections and graph without writing output |
 | `wanshi serve` | `s` | Preview locally with watch and live reload |
-| `wanshi snip` | — | Set a project up for KaTeX (`tex()` helper) |
+| `wanshi snip` | — | Generate VS Code snippet files |
 | `wanshi upgrade` | `u` | Upgrade config shape and sync the Typst library |
 
 ## `wanshi new`
@@ -20,6 +20,7 @@ Creates site files, config files, or sections.
 wanshi new site <path>
 wanshi new config [path]
 wanshi new post <path>
+wanshi new katex
 ```
 
 Aliases: `wanshi n`, and `s` / `c` / `p` for the three subcommands (so
@@ -43,6 +44,18 @@ Options:
 - `--config <path>`, short `-c`: configuration file.
 
 The path is given a `.typ` extension automatically if it has none; any other extension is rejected. A path that already begins with the source tree name is accepted — the prefix is stripped rather than doubled. Intermediate directories are created; existing files are never overwritten.
+
+### `new katex`
+
+Writes `import-math.html`, the KaTeX loader that makes the `tex()` helper render.
+Nothing loads KaTeX otherwise: ordinary equations are MathML and need no library,
+so a site that never calls `tex()` makes no request to a maths CDN.
+
+An existing `import-math.html` is left alone, so the command is safe to re-run.
+
+Options:
+
+- `--config <path>`, short `-c`: configuration file.
 
 ## `wanshi init`
 
@@ -133,15 +146,14 @@ rebuild — a tool can watch it instead of parsing events.
 wanshi snip --katex
 ```
 
-Sets a project up for KaTeX, which is only needed for the `tex()` helper —
-ordinary equations are MathML and render without any library.
+Generates VS Code snippet files in `.vscode/`. Editor convenience only — it does
+not change what a page loads. To make `tex()` render, use
+[`wanshi new katex`](#wanshi-new).
 
 Options:
 
 - `--config <path>`, short `-c`: configuration file.
-- `--katex`, short `-k`: write `.vscode/katex.code-snippets` **and**
-  `import-math.html`, the loader that makes `tex()` actually render. An existing
-  `import-math.html` is left alone, so the command is safe to re-run.
+- `--katex`, short `-k`: write `.vscode/katex.code-snippets`.
 
 `--katex` is currently the only generator, and the command does nothing without
 it. (Upstream kodama also shipped Markdown section snippets; wanshi is

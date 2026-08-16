@@ -31,6 +31,39 @@ pub enum NewCommand {
     /// Create a new post.
     #[command(visible_alias = "p")]
     Post(NewPostCommand),
+
+    /// Create `import-math.html`, the KaTeX loader needed by `tex()`.
+    Katex(NewKatexCommand),
+}
+
+#[derive(clap::Args)]
+pub struct NewKatexCommand {
+    /// Path to the configuration file.
+    #[arg(short, long, default_value_t = config::DEFAULT_CONFIG_PATH.into())]
+    pub config: String,
+}
+
+/// Install the KaTeX loader.
+///
+/// Equations are MathML and render without a library, so nothing loads KaTeX
+/// until a project asks for it. Only the `tex()` helper needs this.
+pub fn new_katex(command: &NewKatexCommand) -> eyre::Result<()> {
+    environment::init_environment(command.config.clone().into(), environment::BuildMode::Serve)?;
+
+    let loader_path = environment::root_dir().join("import-math.html");
+    if loader_path.exists() {
+        color_print::ceprintln!(
+            "<y>Note: `{}` already exists; leaving it alone.</>",
+            loader_path
+        );
+        return Ok(());
+    }
+
+    std::fs::write(&loader_path, environment::default_import_math_html())
+        .wrap_err_with(|| format!("failed to write KaTeX loader to `{}`", loader_path))?;
+    color_print::ceprintln!("<g>[new]</> wrote {}", loader_path);
+
+    Ok(())
 }
 
 #[derive(clap::Args)]

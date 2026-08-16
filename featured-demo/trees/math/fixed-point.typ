@@ -77,7 +77,7 @@ KaTeX is not loaded unless a site asks for it, so `tex` renders nothing until
 you run
 
 ```sh
-wanshi snip --katex
+wanshi new katex
 ```
 
 which writes the loader into `import-math.html`. This forest has done that,

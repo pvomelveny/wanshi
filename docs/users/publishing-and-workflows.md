@@ -155,7 +155,7 @@ whoever reads the markup next.
 
 A generated page fetches one thing: fonts, from Google Fonts. Mathematics is
 MathML and needs no library, so there is no maths CDN to remove unless you added
-one yourself with `wanshi snip --katex` for the `tex()` helper.
+one yourself with `wanshi new katex` for the `tex()` helper.
 
 To drop the remaining dependency, put self-hosted font faces in
 `import-font.html`, which replaces the built-in links. A site is then entirely

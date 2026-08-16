@@ -140,9 +140,11 @@ containing it, so word order, punctuation and repetition are all discarded and a
 word used in a hundred notes is stored once. You cannot reconstruct a note from
 it, and it is roughly a third the size of shipping the text.
 
-Inline math and diagrams are excluded: Typst renders them as SVG, and indexing
-that would fill the index with coordinates and colour values. The practical
-consequence is that **a note is not findable by a symbol it contains** — search
+Diagrams and other `auto-frame` content are excluded: Typst renders them as SVG,
+and indexing that would fill the index with coordinates and colour values.
+Equations are MathML rather than images, so they are not stripped — but their
+symbols are Unicode mathematical alphanumerics that the tokenizer does not treat
+as words. Either way **a note is not findable by a symbol it contains**; search
 for the words around a formula, not the formula.
 
 Set `search-content = false` to index only titles, taxons, and slugs. That makes
@@ -168,7 +170,7 @@ Four of them affect the `<head>`:
 | `import-meta.html` | empty | Appended to the head. Use for favicons, Open Graph tags, analytics. |
 | `import-style.html` | empty | Appended to the head. Use for a `<style>` block or an extra stylesheet that overrides `main.css`. |
 | `import-font.html` | bundled Google Fonts link (Playfair Display, Source Serif 4, Fira Code) | **Replaces** the built-in font imports. Use to self-host fonts or drop the CDN dependency. |
-| `import-math.html` | empty | Appended to the head. Holds the KaTeX loader, if you want one — `wanshi snip --katex` writes it. Only needed for the `tex()` helper; ordinary equations are MathML and need nothing. |
+| `import-math.html` | empty | Appended to the head. Holds the KaTeX loader, if you want one — `wanshi new katex` writes it. Only needed for the `tex()` helper; ordinary equations are MathML and need nothing. |
 
 Three of them are appended to whatever wanshi already emits. `import-font.html`
 is the exception: it **replaces** the built-in font links, so copy the bundled

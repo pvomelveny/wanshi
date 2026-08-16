@@ -95,6 +95,7 @@ fn main() -> eyre::Result<()> {
             NewCommand::Site(command) => crate::cli::new::new_site(command)?,
             NewCommand::Post(command) => crate::cli::new::new_section(command)?,
             NewCommand::Config(command) => crate::cli::new::new_config(command)?,
+            NewCommand::Katex(command) => crate::cli::new::new_katex(command)?,
         },
         Command::Init(command) => crate::cli::init::init(command)?,
         Command::Serve(command) => crate::cli::serve::serve(command)?,

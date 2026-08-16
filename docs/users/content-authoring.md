@@ -69,9 +69,9 @@ Content written in Typst.
 - **`#import`** — pulls in the library. `"/_lib/wanshi.typ"` (root-absolute,
   resolved against `[build].typst-root`) works at any directory depth;
   `"_lib/wanshi.typ"` only works for files at the top of the tree.
-- **`#show: wanshi`** — installs the show rules that convert Typst math into
-  correctly-aligned inline and block SVG in HTML output. Omit it and equations
-  render wrong.
+- **`#show: wanshi`** — the document wrapper. It sets up paged output and is the
+  conventional preamble; equations need no help from it, since Typst emits them
+  as MathML.
 - **`#metadata(...)`** — a dictionary of the keys below.
 
 Everything after that is ordinary Typst, compiled by your local `typst`
@@ -301,9 +301,12 @@ for a KaTeX auto-render pass:
 ```
 
 KaTeX is **opt-in**. Nothing loads it by default, so `tex()` renders nothing
-until you run `wanshi snip --katex`, which writes both the VS Code snippets and
-the `import-math.html` loader. Reach for it when pasting TeX from elsewhere; for
-mathematics you are writing yourself, Typst syntax needs no library.
+until you run `wanshi new katex`, which writes the `import-math.html` loader.
+Reach for it when pasting TeX from elsewhere; for mathematics you are writing
+yourself, Typst syntax needs no library.
+
+(`wanshi snip --katex` is separate: it writes VS Code snippets for typing TeX,
+and has no effect on what a page loads.)
 
 ### Constants
 
