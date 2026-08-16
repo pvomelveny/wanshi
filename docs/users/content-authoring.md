@@ -279,9 +279,19 @@ leaving paged output untouched. `auto-figure` centres content, using a real
 
 ### Math
 
-Inline and block equations written in normal Typst syntax are handled
-automatically by the `#show: wanshi` rule — inline math is rendered as SVG with
-its baseline corrected, and block math is wrapped in a centred container.
+Equations written in normal Typst syntax need nothing added. Typst emits them as
+**MathML**, which browsers lay out as text: on the surrounding baseline, in the
+page's own font and colour, selectable, scaling with the reader's font size, and
+legible to a screen reader. No JavaScript is involved and nothing is fetched.
+
+Because it is text rather than a picture, mathematics also survives the
+plain-text extraction behind RSS summaries, instead of leaving a gap where the
+formula was.
+
+The trade-off is that a browser lays MathML out with its own math font, so a
+page will not match Typst's PDF output glyph for glyph. If you need that exact
+correspondence, wrap the equation in `auto-frame` to force the Typst-rendered
+SVG for that one formula.
 
 For KaTeX-rendered math instead, `tex()` wraps a raw string in `$…$` delimiters
 for the bundled KaTeX auto-render pass:

@@ -195,7 +195,7 @@ The index is inverted instead. Each token maps to the sections containing it, an
 
 Titles, taxons and slugs *are* shipped as text, because results cannot be rendered without them. They are also what the client matches against directly, which is what makes ranking possible: a title hit outranks a body hit, and the inverted index only has to answer "which sections contain this word".
 
-Two details matter for index quality. Sections embedded into a page are excluded from that page's text, since embedded content belongs to the note that wrote it and indexing it twice would make a hub match everything it displays. And elements whose contents are markup rather than prose are removed wholesale before tokenizing — Typst renders inline math and diagrams as SVG, and the general-purpose tag stripper cannot match attribute names containing a colon, so without this the index fills with coordinates and namespace URLs.
+Two details matter for index quality. Sections embedded into a page are excluded from that page's text, since embedded content belongs to the note that wrote it and indexing it twice would make a hub match everything it displays. And elements whose contents are markup rather than prose are removed wholesale before tokenizing — Typst renders diagrams and any `auto-frame` content as SVG, and the general-purpose tag stripper cannot match attribute names containing a colon, so without this the index fills with coordinates and namespace URLs. Equations are not among them: they are MathML, whose text nodes extract cleanly.
 
 The index is a normal optional artifact: written when enabled, removed when disabled, and resolved against `base-url` at build time so the client never has to guess the deploy prefix.
 
@@ -309,13 +309,13 @@ Strict mode upgrades warnings into command failure. Hints remain informational.
 
 Known limits of the current design, recorded so they read as decisions rather than oversights. Each is deferred because the cost of addressing it currently exceeds the harm, not because it is unnoticed.
 
-### Mathematics is invisible to plain-text consumers
+### Mathematics is not indexed, though it is no longer invisible
 
-Two features reduce rendered sections to plain text: RSS summaries and the search index. Both lose all mathematics, because Typst renders math as vector SVG containing only path, symbol, and use elements — no title, no accessible label, no text node of any kind. There is nothing to recover.
+This was once a much larger problem: equations were rendered as vector SVG containing only path, symbol, and use elements, with no title, no accessible label, and no text node of any kind. Plain-text extraction produced summaries with holes where the formulas had been, so a sentence could end on stranded punctuation — "acting on ." — and a note was unfindable by any symbol it contained.
 
-The effect is a summary with holes where the formulas were, so a sentence can end on stranded punctuation: "isomorphic to a subgroup of the symmetric group acting on ." The consequences differ by consumer. A feed reader showing full content renders the mathematics correctly, because the encoded content keeps the SVG; only the plain-text summary shown in a list view is affected. The search index is affected more fundamentally: a note is not findable by any symbol it contains.
+Emitting MathML instead of SVG resolved most of it. Equations are now text in the document, so extraction keeps them: "Let ( 𝑋 , 𝑑 ) be a metric space." RSS summaries read as sentences again, and screen readers reach the mathematics.
 
-The only real fix is upstream of the extraction — having the Typst library emit the mathematical source alongside the rendered SVG, as an accessible label. That would serve summaries, search, and screen readers at once, which is why it is the option worth taking when this becomes worth taking. It is deferred because extracting readable source from an equation is awkward in Typst and needs experimentation rather than a known recipe. Substituting a placeholder for the removed markup was considered and rejected: it trades missing text for different noise without making anything findable.
+What remains is narrower. The symbols are Unicode mathematical alphanumerics — `𝑋`, not `X` — and the tokenizer does not treat them as searchable words, so search still cannot find a note by a symbol in it. That is close to the right behaviour: indexing single italic variables would mostly add noise, since almost every note about algebra contains an `𝑥`. Searching for mathematical *content* would want a different representation entirely — the equation's source, or a normalised form — and that is a retrieval design question rather than an extraction bug.
 
 ### Search index growth is bounded only by vocabulary
 

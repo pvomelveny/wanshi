@@ -692,7 +692,15 @@ figure:has(.typst-frame) {
   overflow-y: hidden;
 }
 
-/* typst html math block */
+/* Display equations, emitted by Typst as MathML. A long formula scrolls in its
+   own box rather than widening the page. */
+math[display="block"] {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* `auto-frame` content — diagrams, and anything else framed deliberately. */
 .typst-block {
   text-align: center;
   margin: 1em 0;

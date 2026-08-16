@@ -53,12 +53,16 @@ How that works, and when it is a bad idea, is at the bottom of this page.
 
 == Two ways to write mathematics
 
-Native Typst maths is rendered at build time and embedded as SVG. It needs no
-JavaScript, and it is what every formula above uses:
+Native Typst maths needs nothing added, and is what every formula above uses:
 
 ```typst
 $ d(T(x), T(y)) <= q dot d(x, y) $
 ```
+
+Typst emits these as MathML, which the browser lays out as text — on the
+surrounding baseline, in this page's serif, in the same ink as the prose. Select
+a formula above and you will find you can copy it. It scales with the reader's
+font size, a screen reader can read it, and nothing is fetched to render it.
 
 The `tex` helper instead passes TeX source through to KaTeX, rendered in the
 browser:

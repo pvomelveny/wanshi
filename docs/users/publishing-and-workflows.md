@@ -283,13 +283,17 @@ they have no page of their own.
 
 ### Mathematics in Summaries
 
-Item summaries are plain text, and Typst renders mathematics as images, so
-**formulas do not appear in the summary** — a sentence built around one can read
-oddly in a reader's list view.
+Item summaries are plain text, and mathematics survives it: equations are
+MathML, so a formula reduces to its symbols rather than vanishing. A summary
+reads as a sentence — "Let ( 𝑋 , 𝑑 ) be a metric space" — instead of breaking
+off where the formula was.
 
-The full article does keep its mathematics: readers that show an item's whole
-content render it normally. Only the short summary is affected. If it bothers
-you, write the opening sentence or two of a note in prose.
+The symbols are Unicode mathematical alphanumerics, so `X` arrives as `𝑋`.
+Readers render that fine; it is only worth knowing if you process summaries
+yourself.
+
+Content wrapped in `auto-frame`, such as a diagram, is still an image and still
+absent from the summary.
 
 ### Checking the Result
 

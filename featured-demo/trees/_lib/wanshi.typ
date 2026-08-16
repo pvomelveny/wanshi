@@ -433,31 +433,22 @@
 
 
 /**
- * HTML: SVG formula rendering vertical position adjustment
+ * Document wrapper.
+ *
+ * Equations are deliberately left alone in HTML: Typst emits MathML for them,
+ * which the browser lays out as text on the surrounding baseline, in the page's
+ * own font and colour, and which stays selectable and legible to a screen
+ * reader.
+ *
+ * They used to be replaced with `html.frame` SVG, to match paged output
+ * exactly. That cost roughly six times the page weight in outlined glyphs, and
+ * an SVG box sits on the baseline by its bottom edge, so every formula floated
+ * above the line by its own depth. The correction for that measured a position
+ * on the page — something HTML export does not have, so it silently never ran.
+ *
+ * `auto-frame` still produces SVG, which is what diagrams and other arbitrary
+ * content need.
  */
-
-#let bounded(eq) = text(top-edge: "bounds", bottom-edge: "bounds", eq)
-#let to-em(pt) = str(pt / text.size.pt()) + "em"
-
-// a dict that stores the height of equations
-#let equations-height-dict = state("eq_height_dict", (:))
-#let is-inside-pin = state("inside_pin", false)
-
-#let pin(label) = context {
-  let height = here().position().y
-  equations-height-dict.update(it => {
-    if label in it.keys() or height < 0.000001pt { it } else {
-      it.insert(label, height); it
-    }
-  })
-}
-
-#let add-pin(eq) = {
-  let label = repr(eq)
-  is-inside-pin.update(true)
-  $ inline(pin(label)#bounded(eq)) $
-  is-inside-pin.update(false)
-}
 
 #let wanshi(doc) = {
   with-target-check((export-target) => {
@@ -466,42 +457,6 @@
       set par(spacing: 1.5em)
       doc
     } else {
-      show math.equation.where(block: false): it => {
-        with-target-check((export-target) => {
-          if export-target == "html" {
-            let label = repr(it)
-            if label in equations-height-dict.final().keys() {
-              let height = equations-height-dict.final().at(label, default: none)
-              equations-height-dict.update(d => {
-                d.insert(label, height); d
-              })
-              let y-length = measure(bounded(it)).height
-              let shift = y-length - height
-              box(html.elem("span", attrs: (
-                class: "typst-inline", //
-                style: "vertical-align: -" + to-em(shift.pt()) + ";",
-              ), html.frame(bounded(it))))
-            } else {
-              box(html.frame(add-pin(it)))
-            }
-          } else {
-            it
-          }
-        })
-      }
-      show math.equation.where(block: true): it => {
-        with-target-check((export-target) => {
-          if export-target == "html" {
-            if is-inside-pin.get() {
-              html.frame(it)
-            } else {
-              html.elem("div", attrs: (class: "typst-block"), html.frame(it))
-            }
-          } else {
-            it
-          }
-        })
-      }
       doc
     }
   })
