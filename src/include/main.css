@@ -666,6 +666,18 @@ nav#toc a {
 
 nav#toc {
   grid-area: toc;
+  /* Never wider than the column it sits in. `[toc].max-width` is applied as a
+     `max-width`, so a content-sized value like `max-content` lets the sidebar
+     grow to its longest entry and spill out of its grid track — titles were
+     clipped at the window edge rather than wrapping. Setting `width` instead
+     bounds it without stopping a smaller `max-width` from shrink-wrapping it. */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* A title with no spaces to break at would still push the column wide. */
+nav#toc .title {
+  overflow-wrap: break-word;
 }
 
 nav {
@@ -702,6 +714,20 @@ li.entry>.date {
 li.entry>ul {
   order: 2;
   flex-basis: 100%;
+}
+
+/* Keep a wrapping sidebar title beside its bullet rather than below it.
+   A flex line breaks on an item's max-content width before any shrinking is
+   considered, so a long title moved to its own line and stranded the bullet
+   above it. A zero flex-basis makes the item ask for nothing, so it stays on
+   the line and the text wraps inside it instead.
+
+   Scoped to the sidebar: entries in the article body put a right-aligned date
+   in the same row, and letting the link grow would swallow the space that
+   `margin-left: auto` needs to push it over. */
+nav#toc li.entry>.link {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* typst html figure */

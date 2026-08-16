@@ -86,10 +86,15 @@ pub fn html_static_css() -> String {
 
 pub fn html_dynamic_css() -> String {
     let toc_max_width = environment::toc_max_width();
+    // The sidebar track is `minmax(0, …)` so it can give ground when the window
+    // is not wide enough for both columns at full size. As a fixed track it
+    // kept its full width and pushed itself past the edge of the window, where
+    // entries were clipped rather than wrapped. The article track stays fixed,
+    // which is what gives it priority over the sidebar as space runs out.
     let grid_columns_value = if environment::is_toc_left() {
-        "max-content var(--article-max-width)"
+        "minmax(0, max-content) var(--article-max-width)"
     } else {
-        "var(--article-max-width) var(--toc-max-width)"
+        "var(--article-max-width) minmax(0, var(--toc-max-width))"
     };
     let theme_lock = if environment::theme_lock() {
         "\n#theme-options { display: none; }"
