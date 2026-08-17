@@ -23,6 +23,7 @@ access; everything else is offline.
 | Taxons, including inventing one | `trees/guide/metadata.typ` | `/guide/metadata.html` |
 | `local`, `external`, references, backlinks | `trees/guide/links.typ` | `/guide/links.html` |
 | `embed`, and its options | `trees/guide/embeds.typ` | `/guide/embeds.html` |
+| Chained embeds, three levels, and the cycle error | `trees/guide/embeds.typ` | `/guide/embeds.html` |
 | `subtree`, anonymous and named, semantic helpers | `trees/guide/subtrees.typ` | `/guide/subtrees.html` |
 | Nested subtrees, three levels deep | `trees/guide/subtrees.typ` | `/guide/subtrees.html` |
 | `children`, `recent`, `by-taxon`, `orphans`, `query` | `trees/guide/listings.typ` | `/guide/listings.html` |

@@ -56,6 +56,39 @@ declares one:
 
 An explicit `parent` beats an embedding one and never loses to it.
 
+== Embeds chain
+
+An embedded note may embed one of its own, and the whole chain renders in
+place. The block below is #local("/guide/chain-middle"), which embeds
+#local("/guide/chain-inner") — so this page shows three levels at once,
+indented, with the table of contents matching.
+
+#embed("/guide/chain-middle", "A note that embeds another")
+
+Structurally this is what #local("/guide/subtrees") does with nesting, and it
+looks the same on the page. The difference is where the nesting lives: a subtree
+is written inside its host file, while a chain of embeds is assembled from
+separate notes, each of which is still an ordinary page of its own.
+
+Parents follow the chain a link at a time — the innermost note's breadcrumb
+points at the note that embeds it, not at this page.
+
+#subtree(title: "A chain can close into a loop", taxon: "observation")[
+  Because embedding is by reference rather than containment, a chain can come
+  back round on itself. Nesting subtrees cannot: they are literally inside one
+  file.
+
+  wanshi refuses to build one, naming the whole path:
+
+  ```
+  Caused by:
+      cyclic embed detected: a -> b -> c -> a
+  ```
+
+  Worth having seen once. A two-note loop is obvious; the one that catches you
+  is assembled from four or five files written weeks apart.
+]
+
 === Embedding the same note in several places
 
 Nothing stops it, and it is often the point — a definition used by three
