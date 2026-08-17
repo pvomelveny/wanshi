@@ -42,6 +42,17 @@ improvement in general, just a different set of choices.
 [Getting Started](/docs/users/getting-started.md#prerequisites) for the
 alternatives.
 
+## Install
+
+No published releases; build it with a Rust toolchain.
+
+```sh
+cargo install --git https://github.com/pvomelveny/wanshi
+```
+
+The binary lands in `~/.cargo/bin`. From a clone, `cargo install --path .` does
+the same. See [Install wanshi](/docs/users/getting-started.md#install-wanshi).
+
 ## Quick Start
 
 ```sh

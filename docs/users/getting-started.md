@@ -34,6 +34,42 @@ watches, and rebuilds — you just serve the output directory yourself.
 Neither `wanshi build` nor `wanshi check` needs a server, so publishing and CI
 require only Typst.
 
+## Install wanshi
+
+There are no published releases. Build it with a Rust toolchain — `rustup` if
+you do not already have one.
+
+From a clone, which is what you want if you intend to change anything:
+
+```sh
+git clone https://github.com/pvomelveny/wanshi
+cd wanshi
+cargo install --path .
+```
+
+Or directly, without keeping the source:
+
+```sh
+cargo install --git https://github.com/pvomelveny/wanshi
+```
+
+Either way the binary lands in `~/.cargo/bin`, which `rustup` puts on your
+`PATH`. Confirm with:
+
+```sh
+wanshi --version
+```
+
+**`cargo install` copies the binary; it does not link to your working tree.**
+Editing the source afterwards changes nothing about the installed `wanshi`
+until you run `cargo install --path .` again. This is a common way to spend ten
+minutes wondering why a fix had no effect — the stylesheet, the JavaScript, and
+the Typst library are all compiled into the executable.
+
+While developing, `cargo run -- <args>` avoids the question by running the
+freshly built code, and `./target/release/wanshi` is the binary a plain
+`cargo build --release` produces.
+
 ## Create a Site
 
 Create a new site in a new directory:
