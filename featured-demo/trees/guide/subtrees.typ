@@ -73,6 +73,52 @@ use.
   identical.
 ]
 
+== Nesting
+
+Subtrees nest. Put one inside another and the page renders it as a section
+within a section, indented, with its own collapse control; the table of contents
+indents to match, so the structure is legible from the sidebar alone.
+
+```typst
+#definition(slug: "monoid", title: "Monoid")[
+  A set with an associative operation and an identity.
+
+  #example(slug: "monoid-strings", title: "Strings under concatenation")[ ... ]
+
+  #remark(title: "A note two levels in")[ ... ]
+]
+```
+
+#definition(slug: "monoid", title: "Monoid")[
+  A set $M$ with an associative binary operation and an identity element $e$.
+
+  #example(slug: "monoid-strings", title: "Strings under concatenation")[
+    Finite strings over an alphabet, with concatenation and the empty string.
+    Associative, and the empty string leaves any string unchanged — so this is a
+    monoid, and it is the free one on that alphabet.
+
+    #remark(title: "Three levels deep, anonymous")[
+      Nesting has no depth limit. This block sits inside the example, which sits
+      inside the definition, which sits inside the page. Being anonymous, it
+      stops here: nothing can link to it.
+    ]
+  ]
+
+  #remark(title: "Why not a separate file?")[
+    A definition that only earns its place inside this argument is easier to
+    read here than one directory over. Give it a slug — as this one has — and it
+    becomes addressable without moving: #local("/guide/monoid-strings") is a
+    real link to a subtree nested two levels down.
+  ]
+]
+
+#subtree(title: "Nesting does not deepen the slug", taxon: "observation")[
+  The example above is `guide/monoid-strings`, not `guide/monoid/strings`. A
+  subtree slug is a single component resolved against the *host file's*
+  directory, and that stays true however deeply the subtree is nested. Nesting
+  is a statement about reading order, not about the address space.
+]
+
 == Subtree or separate file?
 
 A separate file when the note stands on its own, has its own citations, or you
