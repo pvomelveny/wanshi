@@ -10,8 +10,27 @@ use crate::{
     slug::Slug,
 };
 
-const CATALOG_BULLET_SYMBOL: &str = "\u{25A0}"; // ■
+/// Table-of-contents bullets, one per level of indentation.
+///
+/// Shape rather than fill weight, because shape is what a reader can tell apart
+/// without comparing two rows side by side.
+const CATALOG_BULLET_SYMBOLS: [&str; 3] = ["\u{25A0}", "\u{25C6}", "\u{25B8}"]; // ■ ◆ ▸
+
 const HEADER_LOGO_PREFIX: &str = "\u{00AB} "; // «
+
+/// The bullet for a catalog row at `level`, counting the outermost row as 1.
+///
+/// Levels past the palette reuse its last glyph, the way [`super::heading_tag`]
+/// clamps at `h6`. Catalog nesting has no depth limit at all, so there are
+/// always levels with no glyph of their own; indentation is what separates
+/// those, and it keeps working however deep the tree goes.
+fn catalog_bullet(level: u8) -> &'static str {
+    // Saturating rather than `level - 1`: a level of 0 means a caller lost
+    // count, and rendering the top-level bullet is a better answer than a panic
+    // over a decoration.
+    let index = usize::from(level.saturating_sub(1));
+    CATALOG_BULLET_SYMBOLS[index.min(CATALOG_BULLET_SYMBOLS.len() - 1)]
+}
 
 pub fn html_article_inner(
     metadata: &EntryMetaData,
@@ -81,6 +100,8 @@ pub struct CatalogItemArgs<'a> {
     /// Anonymous subtrees have no page of their own, so their row links to an
     /// anchor on the current page instead.
     pub use_hash_href: bool,
+    /// Depth of this row in the catalog, outermost being 1. Selects the bullet.
+    pub level: u8,
 }
 
 pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
@@ -92,6 +113,7 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
         taxon,
         child_html,
         use_hash_href,
+        level,
     } = args;
 
     let hash_href = format!("#{}", crate::slug::to_hash_id(slug.as_str()));
@@ -112,7 +134,7 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
     // the page you are already reading, where the dates are near-identical and
     // uninformative, and the column cost the title enough width to wrap early.
     html!(li class={class_name.join(" ")} {
-        a class="bullet" href={href} title={title_text} { (CATALOG_BULLET_SYMBOL) }
+        a class="bullet" href={href} title={title_text} { (catalog_bullet(level)) }
         span class="link local" onclick={onclick} {
             span class="taxon" { (taxon) }
             span class="title" { (title) }
@@ -138,6 +160,10 @@ pub fn html_catalog_block(items: &str) -> String {
 /// Deliberately reuses the `entry` classes that style the table of contents, so
 /// listings inherit the same date column and bullet treatment. Unlike a catalog
 /// item, every link here points at another page, so there is no hash anchor.
+///
+/// A listing is flat however deeply nested the notes it names are, so the
+/// per-level bullets of [`catalog_bullet`] do not apply: every row takes the
+/// top-level glyph.
 pub fn html_query_item(
     slug: Slug,
     title: &str,
@@ -151,7 +177,7 @@ pub fn html_query_item(
 
     html!(li class="entry" {
         (date_html)
-        a class="bullet" href={href.clone()} title={title_text.clone()} { (CATALOG_BULLET_SYMBOL) }
+        a class="bullet" href={href.clone()} title={title_text.clone()} { (catalog_bullet(1)) }
         a class="link local" href={href} title={title_text} {
             span class="taxon" { (taxon) }
             span class="title" { (title) }
@@ -205,7 +231,30 @@ pub fn html_header_nav(title: &str, page_title: &str, href: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::html_link;
+    use super::{catalog_bullet, html_link, CATALOG_BULLET_SYMBOLS};
+
+    #[test]
+    fn test_catalog_bullet_differs_for_each_level_of_the_palette() {
+        assert_eq!(catalog_bullet(1), "\u{25A0}");
+        assert_eq!(catalog_bullet(2), "\u{25C6}");
+        assert_eq!(catalog_bullet(3), "\u{25B8}");
+    }
+
+    #[test]
+    fn test_catalog_bullet_clamps_past_the_palette() {
+        // Catalog nesting has no depth limit, so this is reachable, not
+        // defensive: past the palette every level keeps the deepest glyph and
+        // indentation carries the structure.
+        let deepest = CATALOG_BULLET_SYMBOLS[CATALOG_BULLET_SYMBOLS.len() - 1];
+        assert_eq!(catalog_bullet(4), deepest);
+        assert_eq!(catalog_bullet(6), deepest);
+        assert_eq!(catalog_bullet(u8::MAX), deepest);
+    }
+
+    #[test]
+    fn test_catalog_bullet_treats_level_zero_as_the_top_level() {
+        assert_eq!(catalog_bullet(0), catalog_bullet(1));
+    }
 
     #[test]
     fn test_html_link_escapes_title_attribute() {

@@ -344,7 +344,15 @@ impl Writer {
         }
     }
 
-    fn catalog_item(section: &Section, taxon: &str, child_html: &str) -> eyre::Result<String> {
+    /// `depth` is the section's heading depth, not its catalog depth. A page
+    /// renders at `PAGE_LEVEL` and emits no row of its own, so its children —
+    /// the outermost catalog rows — arrive here one deeper than that.
+    fn catalog_item(
+        section: &Section,
+        taxon: &str,
+        child_html: &str,
+        depth: u8,
+    ) -> eyre::Result<String> {
         let slug = section.slug()?;
         let title = section.metadata.title().map_or("", |s| s);
         let page_title = section.metadata.page_title().map_or("", |s| s);
@@ -357,6 +365,7 @@ impl Writer {
             taxon,
             child_html,
             use_hash_href,
+            level: depth.saturating_sub(PAGE_LEVEL),
         }))
     }
 
@@ -469,7 +478,7 @@ impl Writer {
             section
                 .option
                 .catalog
-                .then(|| Writer::catalog_item(section, &adhoc_taxon, &child_html))
+                .then(|| Writer::catalog_item(section, &adhoc_taxon, &child_html, depth))
                 .transpose()?
                 .unwrap_or(String::new())
         };
@@ -748,6 +757,50 @@ mod tests {
             assert!(html.contains(&format!(r#"href="{}""#, leaf_href)));
             assert!(html.contains(&format!(r#"href="{}""#, anon_hash_href)));
             assert!(!html.contains(&format!(r#"href="{}""#, anon_href)));
+        });
+    }
+
+    /// Pins the level arithmetic, which is off by one and easy to get wrong: a
+    /// page emits no catalog row of its own, so its children are the outermost
+    /// rows and must take the *first* bullet, not the second.
+    #[test]
+    fn test_html_doc_toc_bullets_step_down_with_nesting() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let nest = |slug: &str, title: &str, child: &str| {
+                shallow_section_with_content(
+                    slug,
+                    title,
+                    HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                        url: format!("/{}", child),
+                        title: None,
+                        option: SectionOption::default(),
+                    })]),
+                )
+            };
+            shallows.insert(Slug::new("index"), nest("index", "Root", "outer"));
+            shallows.insert(Slug::new("outer"), nest("outer", "Outer", "middle"));
+            shallows.insert(Slug::new("middle"), nest("middle", "Middle", "inner"));
+            shallows.insert(Slug::new("inner"), shallow_section("inner", "Inner"));
+
+            let state = compile_all(&shallows).unwrap();
+            let root = state.compiled().get(&Slug::new("index")).unwrap();
+            let (html, _) = Writer::html_doc(root, &state).unwrap();
+
+            let bullet_of = |slug: &str| {
+                let href = environment::full_html_url(Slug::new(slug));
+                let anchor = html
+                    .match_indices(&format!(r#"href="{}""#, href))
+                    .map(|(i, _)| &html[i..])
+                    .find(|rest| rest.contains("</a>"))
+                    .unwrap_or_else(|| panic!("no catalog row for `{}`", slug));
+                let text = &anchor[anchor.find('>').unwrap() + 1..];
+                text[..text.find("</a>").unwrap()].to_string()
+            };
+
+            assert_eq!(bullet_of("outer"), "\u{25A0}");
+            assert_eq!(bullet_of("middle"), "\u{25C6}");
+            assert_eq!(bullet_of("inner"), "\u{25B8}");
         });
     }
 
