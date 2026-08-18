@@ -126,7 +126,7 @@ have every note start numbered; a note's own key overrides it either way.
 Where the number lands depends on whether there is a word for it to attach to. A
 block with a taxon reads `Definition 1.`, the digits inside the label, the way a
 statement is written on paper. A heading has no taxon, so its number goes in
-front of the title — `6. Numbering`, above. Both are the ordinary convention for
+front of the title — `3. Numbering`, above. Both are the ordinary convention for
 what they label.
 
 An individual block overrides the note with `numbering:`, which is how the proof
@@ -140,21 +140,38 @@ Three details of how the counter behaves:
 
 #subtree(title: "One counter, shared by every taxon", taxon: "observation")[
   The theorem above is numbered 2, not 1, because the definition took 1. There
-  is no separate counter per statement type, and none per heading either — this
-  section is 6 because five things preceded it. That matches the common
-  convention of a single shared counter, and it is the reason a numbered remark
-  can appear as `Remark 3.`
+  is no separate counter per statement type: definitions, theorems and remarks
+  share one sequence, which is why a numbered remark can appear as `Remark 3.`
+
+  Headings count separately. This section is 3 because two headings preceded it,
+  not 6 — the three statements above are in their own sequence and do not push
+  it along.
 
   Opting a block out, as the proof does, takes it out of the sequence entirely
   rather than giving it a number nobody cites.
 ]
 
 #subtree(title: "Nesting adds a level", taxon: "observation")[
-  A numbered block inside a numbered block counts as `6.1`, `6.2`, and so on, so
-  a definition with numbered sub-remarks reads the way it would on paper. Since
-  headings are sections too, a heading is what usually supplies the first
-  number: these observations are numbered within this section rather than
-  restarting.
+  Statements are numbered inside the section that holds them, so the
+  observations here start again at `3.1` rather than continuing the `1, 2, 3`
+  of the statements above. Nesting deepens it again: an observation inside `3.2`
+  reads `3.2.1`.
+
+  The three statements at the top of this page carry no section number because
+  no heading had opened yet. Write one after a heading — `#outdent()` gets you
+  back out — and it picks the top-level sequence up where it left off rather
+  than restarting.
+]
+
+#subtree(title: "A number can name two things", taxon: "observation")[
+  Look down this page: `3.1` names both *One counter, shared by every taxon* at
+  the top of this section and the subsection *Why the rest of this forest does
+  not use it* below it. Statements and subsections are separate sequences
+  hanging off the same section number, so they collide by construction.
+
+  That is what a paper does too — `Theorem 3.1` and `Section 3.1` coexist
+  everywhere — and the label is what resolves it. Say "Observation 3.1" or
+  "Section 3.1" and there is no ambiguity; say "3.1" alone and there is.
 ]
 
 #subtree(title: "The page itself is not numbered", taxon: "observation")[

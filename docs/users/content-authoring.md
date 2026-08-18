@@ -162,9 +162,24 @@ block with a taxon reads `Definition 1.`, the digits inside the label; a heading
 has no taxon, so its number goes in front of the title — `2. Background`. Both
 are the ordinary convention for the thing being labelled.
 
-One counter, shared. There is no separate sequence per taxon or for headings, so
-a definition following two headings is numbered 3. Nesting deepens it: a block
-inside section 2 is `2.1`.
+Two sequences, not one. Headings count `1, 2, 3` as the page's outline;
+taxon'd blocks count separately, so the first heading is 1 even when three
+definitions precede it.
+
+A statement is numbered **inside the section holding it** — an observation in
+section 3 is `Observation 3.1.` — which is the convention a paper uses. A
+statement written before any heading has no section to sit in, so it takes a
+bare number; if you return to the top level later (see [`outdent`](#outdent)),
+that sequence picks up where it left off rather than restarting.
+
+A consequence worth knowing: within one section, a subsection and a statement
+can both be `3.1`. That is what LaTeX does, and the taxon word is what resolves
+it — "Observation 3.1" and "Section 3.1" are unambiguous, "3.1" alone is not.
+
+A section with no taxon counts in the **outline** sequence, because that is
+already how it renders: no taxon means the number leads the title, like a
+heading. So embedding a note that has no taxon of its own makes it a numbered
+section of the page it lands in.
 
 The page's own title never takes a number. It is the only thing at its level, so
 a number would distinguish it from nothing, and taking one would push every
