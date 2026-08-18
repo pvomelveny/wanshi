@@ -25,7 +25,7 @@ impl Taxon {
     /// capitalises it and either appends the numbering or the ". " separator.
     pub fn display(&self) -> String {
         match &self.numbering {
-            Some(numbering) => format!("{} {} ", capitalize(&self.text), numbering),
+            Some(numbering) => format!("{} {}", capitalize(&self.text), numbering),
             None => display_taxon(&self.text),
         }
     }
@@ -47,7 +47,12 @@ fn capitalize(s: &str) -> String {
     }
 }
 
-/// Format an authored taxon for display: capitalised, with a ". " separator.
+/// Format an authored taxon for display: capitalised, with a trailing period.
+///
+/// No trailing space. The taxon is rendered inside a bordered pill, so a space
+/// here sits *inside* the border and pushes the right edge away from the text.
+/// Separation from the title is the pill's `margin-right`, which is the job of
+/// the stylesheet rather than of the string.
 ///
 /// This is applied when a taxon is *rendered*. The metadata keeps the authored
 /// string, so `data-taxon`, sorting, and `wanshi.json` all see what the author
@@ -58,7 +63,7 @@ pub fn display_taxon(s: &str) -> String {
     if s.is_empty() {
         return String::new();
     }
-    format!("{}. ", capitalize(s))
+    format!("{}.", capitalize(s))
 }
 
 #[cfg(test)]
@@ -67,19 +72,19 @@ mod tests {
 
     #[test]
     fn test_display_taxon_capitalizes_and_appends_separator() {
-        assert_eq!(display_taxon("definition"), "Definition. ");
+        assert_eq!(display_taxon("definition"), "Definition.");
     }
 
     #[test]
     fn test_display_taxon_leaves_an_already_capital_taxon_alone() {
-        assert_eq!(display_taxon("Theorem"), "Theorem. ");
+        assert_eq!(display_taxon("Theorem"), "Theorem.");
     }
 
     #[test]
     fn test_display_taxon_preserves_a_taxon_containing_a_dot() {
         // The whole point of formatting at render time: the authored value is
         // never round-tripped through a form that has to be parsed back.
-        assert_eq!(display_taxon("fig. 3 caption"), "Fig. 3 caption. ");
+        assert_eq!(display_taxon("fig. 3 caption"), "Fig. 3 caption.");
     }
 
     #[test]
@@ -90,13 +95,13 @@ mod tests {
 
     #[test]
     fn test_display_taxon_handles_multibyte_first_char() {
-        assert_eq!(display_taxon("参考"), "参考. ");
+        assert_eq!(display_taxon("参考"), "参考.");
     }
 
     #[test]
     fn test_taxon_display_with_numbering_capitalizes_and_appends_number() {
         let t = Taxon::new(Some("1.2".to_string()), "theorem".to_string());
-        assert_eq!(t.display(), "Theorem 1.2 ");
+        assert_eq!(t.display(), "Theorem 1.2");
     }
 
     #[test]

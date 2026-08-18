@@ -331,7 +331,10 @@ span.taxon {
   background-color: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 0.05em 0.5em;
+  /* Less padding on the right: `letter-spacing` is applied after the last
+     character too, so equal padding leaves the pill visibly loose after the
+     period. */
+  padding: 0.05em 0.4em 0.05em 0.5em;
   margin-right: 0.5em;
 }
 
