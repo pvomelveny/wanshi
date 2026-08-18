@@ -277,8 +277,16 @@ impl EntryMetaData {
         show_extra: bool,
         level: u8,
     ) -> eyre::Result<String> {
-        let entry_taxon = self.taxon().map_or("", |s| s);
-        let taxon = adhoc_taxon.unwrap_or(entry_taxon);
+        // Formatted here because the metadata holds the taxon exactly as
+        // authored. Callers that already have a rendered taxon — a numbered
+        // one, say — pass it as `adhoc_taxon`; callers that do not, such as a
+        // footer entry, would otherwise print the raw value: `exegesis` rather
+        // than `Exegesis.`
+        let entry_taxon = self
+            .taxon()
+            .map(|taxon| crate::compiler::taxon::display_taxon(taxon))
+            .unwrap_or_default();
+        let taxon = adhoc_taxon.unwrap_or(&entry_taxon);
         let entry_title = self.0.get("title").map(|s| s.as_str()).unwrap_or("");
         let title = adhoc_title.unwrap_or(entry_title);
         let slug = self

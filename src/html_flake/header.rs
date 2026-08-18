@@ -262,6 +262,32 @@ mod tests {
     }
 
     #[test]
+    fn test_header_formats_an_unrendered_taxon() {
+        // A footer entry calls `to_header` with no `adhoc_taxon`, so the
+        // fallback path has to format the authored value itself. It used to
+        // pass it through, printing `exegesis` where the page header showed
+        // `Exegesis.`
+        use crate::compiler::taxon::display_taxon;
+        assert_eq!(display_taxon("exegesis"), "Exegesis.");
+
+        let etc = Vec::new();
+        let slug = Slug::new("book/child");
+        let rendered = super::html_header(super::HtmlHeaderArgs {
+            title: "Title",
+            taxon: &display_taxon("exegesis"),
+            slug: &slug,
+            ext: "typst",
+            show_slug: true,
+            source_slug: None,
+            source_pos: None,
+            etc: &etc,
+            show_extra: true,
+            level: 3,
+        });
+        assert!(rendered.contains(r#"<span class="taxon">Exegesis.</span>"#));
+    }
+
+    #[test]
     fn test_heading_tag_tracks_level_and_clamps() {
         assert_eq!(super::heading_tag(1), "h1");
         assert_eq!(super::heading_tag(3), "h3");
