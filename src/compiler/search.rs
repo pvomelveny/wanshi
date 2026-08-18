@@ -84,7 +84,7 @@ pub(super) fn build(state: &CompileState) -> SearchIndex {
             slug: slug.to_string(),
             url: environment::full_html_url(slug),
             title,
-            taxon: strip_taxon_suffix(&taxon),
+            taxon,
             date,
         });
     }
@@ -114,11 +114,6 @@ fn own_text(section: &Section) -> String {
 
 fn strip_html(html: &str) -> String {
     crate::html_text::to_plain_text(html, &crate::html_text::NON_TEXT_ELEMENTS)
-}
-
-/// Taxons are stored for display as `"Definition. "`; results show them bare.
-fn strip_taxon_suffix(taxon: &str) -> String {
-    taxon.trim().trim_end_matches('.').trim().to_string()
 }
 
 /// Lowercased alphanumeric runs. Deliberately simple: no stemming, so a search
@@ -159,13 +154,6 @@ mod tests {
         for expected in ["free", "monoid", "semigroup", "ring", "field"] {
             assert!(tokens.contains(expected), "missing `{expected}`");
         }
-    }
-
-    #[test]
-    fn test_strip_taxon_suffix_removes_display_punctuation() {
-        assert_eq!(strip_taxon_suffix("Definition. "), "Definition");
-        assert_eq!(strip_taxon_suffix("Remark"), "Remark");
-        assert_eq!(strip_taxon_suffix(""), "");
     }
 
     #[test]

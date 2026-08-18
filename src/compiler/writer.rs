@@ -18,7 +18,7 @@ use super::{
     callback::CallbackValue,
     section::{Section, SectionContent},
     state::CompileState,
-    taxon::Taxon,
+    taxon::{display_taxon, Taxon},
 };
 
 pub struct Writer {}
@@ -389,15 +389,21 @@ impl Writer {
         }
     }
 
+    /// Render-time formatting of a section's taxon.
+    ///
+    /// The metadata holds the taxon exactly as authored; capitalisation and the
+    /// trailing ". " separator are applied here, at the point of display.
     fn taxon(section: &Section, counter: &mut Counter) -> String {
+        let text = section.metadata.taxon().map_or("", |s| s);
+        if text.is_empty() {
+            return String::new();
+        }
         if section.option.numbering {
             counter.step_mut();
             let numbering = Some(counter.display());
-            let text = section.metadata.taxon().map_or("", |s| s);
-            let taxon = Taxon::new(numbering, text.to_string());
-            return taxon.display();
+            return Taxon::new(numbering, text.to_string()).display();
         }
-        section.metadata.taxon().map_or("", |s| s).to_string()
+        display_taxon(text)
     }
 
     fn is_internal_anonymous_subtree(section: &Section) -> eyre::Result<bool> {
