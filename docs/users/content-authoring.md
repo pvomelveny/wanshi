@@ -143,6 +143,49 @@ Nesting deeper than six levels clamps at `h6`, which is the deepest heading HTML
 defines. Typst's `======` is not emitted as a heading element at all — it becomes
 a `<div role="heading">` — so it opens no section and is left in the prose.
 
+## Numbering
+
+A note decides once whether its sections are numbered:
+
+```typst
+#metadata((
+  "title": "The Banach fixed-point theorem",
+  "numbering": "true",
+))
+```
+
+Everything on the page follows: headings, embeds and subtrees alike. A site can
+set `[build].numbering` to start every note numbered, and any note overrides it.
+
+Where the number lands depends on whether there is a word for it to attach to. A
+block with a taxon reads `Definition 1.`, the digits inside the label; a heading
+has no taxon, so its number goes in front of the title — `2. Background`. Both
+are the ordinary convention for the thing being labelled.
+
+One counter, shared. There is no separate sequence per taxon or for headings, so
+a definition following two headings is numbered 3. Nesting deepens it: a block
+inside section 2 is `2.1`.
+
+The page's own title never takes a number. It is the only thing at its level, so
+a number would distinguish it from nothing, and taking one would push every
+number below it a level deeper.
+
+An individual block overrides the note:
+
+```typst
+#proof(numbering: false)[ ... ]        // stays out of the sequence
+#embed("/note", "A note", numbering: true)   // numbered on an unnumbered page
+```
+
+Opting a block out covers what is inside it too, and takes it out of the
+sequence rather than giving it a number nobody cites.
+
+**A number describes a position on a page, not a note.** The same note embedded
+in two pages takes a different number in each, and an embedded note's own
+`numbering` metadata is ignored — the page it appears in decides. That is why a
+number is not a durable way to refer to anything; `#local()` is, and renders the
+target's own title. Numbers for reading, slugs for referring.
+
 ## Metadata Reference
 
 ### Identity and Display
@@ -153,6 +196,7 @@ a `<div role="heading">` — so it opens no section and is left in the prose.
 | `page-title` | string | Plain-text browser title override. Defaults to `title` with markup stripped. |
 | `taxon` | string | Display category — `definition`, `remark`, `theorem`, `reference`, … Rendered as a label before the title. |
 | `data-taxon` | string | Plain taxonomy attribute. Auto-derived from `taxon`; override only if you need the attribute to differ from the label. |
+| `numbering` | bool | Whether this page's sections carry numbers. Falls back to `[build].numbering`. Read from the page being rendered, so an embedded note follows the page it appears in rather than its own file. See [Numbering](#numbering). |
 | `date` | string | Conventional, but privileged: it gets its own column in page headers and catalog entries, and is the natural `footer-sort-by` key. |
 
 ### Graph and Navigation
@@ -208,7 +252,7 @@ Everything below comes from `trees/_lib/wanshi.typ`, imported with
 
 ```typst
 #local(slug, text: none)
-#embed(url, title, numbering: false, open: true, catalog: true, display-options: false)
+#embed(url, title, numbering: auto, open: true, catalog: true, display-options: false)
 #external(dest, content)
 ```
 
@@ -239,7 +283,7 @@ Parameters:
 | `slug` | `none` | Explicit slug, resolved relative to the containing **directory**. Omit for an anonymous subtree. |
 | `title` | `none` | Title for the generated section. |
 | `taxon` | `none` | Taxon for the generated section. |
-| `numbering` | `false` | Number the section. |
+| `numbering` | `auto` | Number the section. `auto` follows the note; `true` or `false` overrides it for this block alone. |
 | `open` | `true` | Whether the `<details>` starts expanded. |
 | `catalog` | `true` | Include in the table of contents. |
 
