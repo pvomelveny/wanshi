@@ -13,7 +13,9 @@ use crate::{
 /// Table-of-contents bullets, one per level of indentation.
 ///
 /// Shape rather than fill weight, because shape is what a reader can tell apart
-/// without comparing two rows side by side.
+/// without comparing two rows side by side. These are not the same size as each
+/// other, so `main.css` scales each level down to compensate — extending this
+/// palette means adding a matching rule there.
 const CATALOG_BULLET_SYMBOLS: [&str; 3] = ["\u{25A0}", "\u{25C6}", "\u{25B8}"]; // ■ ◆ ▸
 
 const HEADER_LOGO_PREFIX: &str = "\u{00AB} "; // «

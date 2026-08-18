@@ -717,6 +717,28 @@ nav {
   font-optical-sizing: auto;
 }
 
+/* Bullets get smaller as they nest, so depth reads from the mark itself and not
+   only from the indent.
+
+   This has to be done in CSS because the glyphs are not the same size to begin
+   with: at one size in Source Serif 4 the ink of ■ ◆ ▸ measures 7.4, 8.5 and 9.3
+   across, so the shapes `CATALOG_BULLET_SYMBOLS` steps through would otherwise
+   grow with depth rather than shrink. These factors cancel that out and leave an
+   even step down of about an eighth per level.
+
+   Keyed on `ul` nesting rather than on a level attribute, which means it must
+   track the palette in `src/html_flake/core.rs`. Both stop at three, and both
+   let deeper levels keep the last value: a fourth-level `ul` still matches the
+   three-`ul` rule, and no rule is more specific, so the size clamps exactly
+   where the glyph does. */
+nav#toc ul ul a.bullet {
+  font-size: 0.75em;
+}
+
+nav#toc ul ul ul a.bullet {
+  font-size: 0.62em;
+}
+
 nav#toc a.bullet {
   opacity: 0.7;
   margin-left: 0.4rem;
