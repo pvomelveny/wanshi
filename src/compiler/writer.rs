@@ -6,7 +6,7 @@ use eyre::eyre;
 use std::{collections::HashSet, ops::Not};
 
 use crate::{
-    compiler::counter::Counter,
+    compiler::counter::{Counter, NumberKind},
     config::build::FooterMode,
     entry::{MetaData, KEY_INTERNAL_ANON_SUBTREE},
     environment::{self, verify_update_hash},
@@ -82,6 +82,16 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
 
     out.push_str(&html[cursor..]);
     out
+}
+
+/// What a section's title carries, and where numbering has got to inside it.
+///
+/// `taxon` and `number` are never both set: a section with a taxon shows its
+/// number in the pill, one without shows a bare number in front of the title.
+struct Label {
+    taxon: String,
+    number: String,
+    children: Counter,
 }
 
 pub struct Writer {}
@@ -477,14 +487,14 @@ impl Writer {
         // nothing — and taking one would push every number on the page a level
         // deeper, turning `Definition 1.` into `Definition 1.1.`
         let numbered_here = numbering && !toplevel;
-        let (adhoc_taxon, adhoc_number) = Writer::label(section, counter, numbered_here);
+        let Label {
+            taxon: adhoc_taxon,
+            number: adhoc_number,
+            children: mut subcounter,
+        } = Writer::label(section, counter, numbered_here);
         let (mut contents, mut items) = (String::new(), String::new());
 
         if !section.children.is_empty() {
-            let mut subcounter = match numbered_here {
-                true => counter.left_shift(),
-                false => counter.clone(),
-            };
             let is_collection = section.metadata.is_collect()?;
 
             for child in &section.children {
@@ -601,21 +611,39 @@ impl Writer {
     ///
     /// The counter steps for either, so an unnumbered taxon and a numbered
     /// heading share one sequence rather than each keeping their own.
-    fn label(section: &Section, counter: &mut Counter, numbering: bool) -> (String, String) {
+    fn label(section: &Section, counter: &mut Counter, numbering: bool) -> Label {
         let text = section.metadata.taxon().map_or("", |s| s);
         if !numbering {
-            return (display_taxon(text), String::new());
+            return Label {
+                taxon: display_taxon(text),
+                number: String::new(),
+                children: counter.passthrough(),
+            };
         }
 
-        counter.step_mut();
-        let number = counter.display();
-        if text.is_empty() {
-            (String::new(), number)
+        // The taxon decides both which sequence the section counts in and where
+        // its number is rendered, so the two can never disagree: a section with
+        // no taxon is part of the outline and shows a leading number, one with a
+        // taxon is a statement and shows its number inside the pill.
+        let kind = if text.is_empty() {
+            NumberKind::Outline
         } else {
-            (
-                Taxon::new(Some(number), text.to_string()).display(),
-                String::new(),
-            )
+            NumberKind::Statement
+        };
+        let (number, children) = counter.take(kind);
+
+        if text.is_empty() {
+            Label {
+                taxon: String::new(),
+                number,
+                children,
+            }
+        } else {
+            Label {
+                taxon: Taxon::new(Some(number), text.to_string()).display(),
+                number: String::new(),
+                children,
+            }
         }
     }
 
@@ -1048,6 +1076,72 @@ mod tests {
                 )],
             );
             assert_eq!(labels(&html), vec!["", "Definition."]);
+        });
+    }
+
+    /// The two sequences at render level, and the case that prompted separating
+    /// them: a heading is 1 even after statements, and a statement written once
+    /// the heading has closed picks the top-level sequence back up.
+    #[test]
+    fn test_headings_and_statements_count_separately_across_the_page() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let embed = |url: &str| {
+                LazyContent::Embed(EmbedContent {
+                    url: url.to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })
+            };
+
+            let mut page = shallow_section_with_content(
+                "index",
+                "Root",
+                HTMLContent::Lazy(vec![embed("/first"), embed("/section"), embed("/after")]),
+            );
+            page.metadata.0.insert(
+                KEY_NUMBERING.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
+            shallows.insert(Slug::new("index"), page);
+
+            for (slug, taxon) in [
+                ("first", "definition"),
+                ("inside", "remark"),
+                ("after", "definition"),
+            ] {
+                let mut section = shallow_section(slug, slug);
+                section
+                    .metadata
+                    .0
+                    .insert(KEY_TAXON.to_string(), HTMLContent::Plain(taxon.to_string()));
+                shallows.insert(Slug::new(slug), section);
+            }
+
+            // No taxon, so this counts in the outline and holds a statement.
+            shallows.insert(
+                Slug::new("section"),
+                shallow_section_with_content(
+                    "section",
+                    "A section",
+                    HTMLContent::Lazy(vec![embed("/inside")]),
+                ),
+            );
+
+            let state = compile_all(&shallows).unwrap();
+            let root = state.compiled().get(&Slug::new("index")).unwrap();
+            let html = Writer::html_doc(root, &state).unwrap().0;
+
+            assert_eq!(
+                labels(&html),
+                vec![
+                    "",              // the page itself
+                    "Definition 1.", // a statement, before any section
+                    "1.",            // the first section, despite following a statement
+                    "Remark 1.1.",   // numbered inside that section
+                    "Definition 2.", // back at top level, continuing 1
+                ]
+            );
         });
     }
 
