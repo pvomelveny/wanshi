@@ -9,15 +9,23 @@ use crate::{
     slug::Slug,
 };
 
-pub fn html_header_metadata(etc: &[(String, String)]) -> String {
+/// The row under a title: the date, and the note's custom keys.
+///
+/// `show_extra` drops everything but the date. Custom keys are rendered as
+/// bare values with no key name, which reads as stray words wherever the
+/// section is not the subject of the page — a footer entry would otherwise
+/// print another note's author and status as if they were this page's.
+pub fn html_header_metadata(etc: &[(String, String)], show_extra: bool) -> String {
     let date = etc.iter().find(|(key, _)| key == KEY_DATE).map(|(_, v)| v);
 
     let mut items = String::new();
-    for (key, value) in etc {
-        if key == KEY_DATE {
-            continue;
+    if show_extra {
+        for (key, value) in etc {
+            if key == KEY_DATE {
+                continue;
+            }
+            items.push_str(&html!(li class="meta-item" { (value) }));
         }
-        items.push_str(&html!(li class="meta-item" { (value) }));
     }
     let rest = html!(div class="metadata" { ul { (items) } });
 
@@ -39,6 +47,8 @@ pub struct HtmlHeaderArgs<'a> {
     pub source_slug: Option<&'a str>,
     pub source_pos: Option<&'a str>,
     pub etc: &'a [(String, String)],
+    /// Whether the note's custom keys appear beneath the title.
+    pub show_extra: bool,
 }
 
 pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
@@ -51,6 +61,7 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
         source_slug,
         source_pos,
         etc,
+        show_extra,
     } = args;
     let slug_str = slug.as_str();
     let source_slug = source_slug.unwrap_or(slug_str);
@@ -113,7 +124,7 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
             (hash_anchor)
             (edit_url)
         }
-        (html_header_metadata(etc))
+        (html_header_metadata(etc, show_extra))
     })
 }
 
@@ -223,9 +234,28 @@ mod tests {
             source_slug: None,
             source_pos: None,
             etc: &etc,
+            show_extra: true,
         });
         assert!(!html.contains("class=\"slug\""));
         assert!(html.contains("href=\"#book-child\""));
         assert!(html.contains(">[#]</a>"));
+    }
+
+    #[test]
+    fn test_header_metadata_keeps_the_date_but_can_drop_custom_keys() {
+        let etc = vec![
+            ("date".to_string(), "2026-08-17".to_string()),
+            ("author".to_string(), "Someone".to_string()),
+        ];
+
+        let shown = super::html_header_metadata(&etc, true);
+        assert!(shown.contains("2026-08-17"));
+        assert!(shown.contains("Someone"));
+
+        // A footer entry renders another note's header; its custom keys would
+        // read as stray words belonging to the page doing the linking.
+        let hidden = super::html_header_metadata(&etc, false);
+        assert!(hidden.contains("2026-08-17"), "the date still belongs");
+        assert!(!hidden.contains("Someone"), "custom keys should be dropped");
     }
 }

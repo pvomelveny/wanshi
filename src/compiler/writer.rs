@@ -238,7 +238,6 @@ impl Writer {
         let slug = section.slug()?;
         let title = section.metadata.title().map_or("", |s| s);
         let page_title = section.metadata.page_title().map_or("", |s| s);
-        let date = section.metadata.get_str("date").map(String::as_str);
         let use_hash_href = Writer::is_internal_anonymous_subtree(section)?;
         Ok(html_flake::catalog_item(html_flake::CatalogItemArgs {
             slug,
@@ -246,7 +245,6 @@ impl Writer {
             page_title,
             details_open: section.option.details_open,
             taxon,
-            date,
             child_html,
             use_hash_href,
         }))
@@ -271,7 +269,7 @@ impl Writer {
 
         match footer_mode {
             FooterMode::Link => {
-                let summary = section.metadata.to_header(None, None)?;
+                let summary = section.metadata.to_header(None, None, false)?;
                 let data_taxon = section.metadata.data_taxon().map_or("", |s| s);
                 Ok(format!(
                     r#"<section class="block" data-taxon="{data_taxon}" style="margin-bottom: 0.4em;">{summary}</section>"#
@@ -282,10 +280,13 @@ impl Writer {
                 for content in &section.children {
                     contents.push_str(&Writer::footer_content_to_html(page_option, content)?);
                 }
+                // A footer entry is a pointer to another note. Its author,
+                // status and the rest belong on that note's own page, not
+                // repeated unlabelled under every page that links to it.
                 html_flake::html_article_inner(
                     &section.metadata,
                     &contents,
-                    false,
+                    true,
                     false,
                     None,
                     None,

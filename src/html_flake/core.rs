@@ -21,7 +21,7 @@ pub fn html_article_inner(
     adhoc_title: Option<&str>,
     adhoc_taxon: Option<&str>,
 ) -> eyre::Result<String> {
-    let summary = metadata.to_header(adhoc_title, adhoc_taxon)?;
+    let summary = metadata.to_header(adhoc_title, adhoc_taxon, !hide_metadata)?;
 
     let article_id = metadata.id()?;
     Ok(html_section(
@@ -71,7 +71,6 @@ pub struct CatalogItemArgs<'a> {
     pub page_title: &'a str,
     pub details_open: bool,
     pub taxon: &'a str,
-    pub date: Option<&'a str>,
     pub child_html: &'a str,
     /// Anonymous subtrees have no page of their own, so their row links to an
     /// anchor on the current page instead.
@@ -85,7 +84,6 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
         page_title,
         details_open,
         taxon,
-        date,
         child_html,
         use_hash_href,
     } = args;
@@ -104,10 +102,10 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
         class_name.push("item-summary".to_string());
     }
 
-    let date_html = date.map_or(String::new(), |d| html!(span class="date" { (d) }));
-
+    // No date column here, unlike a listing row. A catalog lists the sections of
+    // the page you are already reading, where the dates are near-identical and
+    // uninformative, and the column cost the title enough width to wrap early.
     html!(li class={class_name.join(" ")} {
-        (date_html)
         a class="bullet" href={href} title={title_text} { (CATALOG_BULLET_SYMBOL) }
         span class="link local" onclick={onclick} {
             span class="taxon" { (taxon) }
