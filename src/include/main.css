@@ -340,16 +340,25 @@ span.taxon {
 }
 
 /* Sections without a taxon still emit the element, so without this an index
-   page shows an empty bordered pill wherever it is linked or listed. The
-   :empty pseudo-class outranks the more specific header rule below, so this
-   covers page headers and inline listings alike. */
-.taxon:empty {
+   page shows an empty bordered pill wherever it is linked or listed.
+   The second selector is not redundant. The header rule further down sets
+   `display: inline-block`, and once it began matching on `.section-title`
+   rather than on `h1` it carried two classes to this rule's one-plus-pseudo —
+   enough to win, and the empty pill came back. Matching the class here too
+   keeps this ahead of it. */
+.taxon:empty,
+.section-title>.taxon:empty {
   display: none;
 }
 
+/* Upright, like the Typst headings a section title now matches in size and
+   level. The taxon pill and the slug link are what mark a title as a note with
+   an identity; italics were doing that job a second time, and made a section
+   title read as a different kind of thing from the heading beside it.
+   Applies to the sidebar and to listing rows too, which index these same
+   titles and would otherwise disagree with the page. */
 .title {
   font-family: var(--heading-font-family);
-  font-style: italic;
 }
 
 /* One scale for every heading in an article, whether Typst wrote it or it is a
