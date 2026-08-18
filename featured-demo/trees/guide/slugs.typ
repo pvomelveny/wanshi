@@ -16,7 +16,7 @@ rule; there is no separate identifier to assign and keep in sync.
 Slugs are the address space. Links, parents, listings, and the published URL all
 refer to a note by its slug, so moving a file renames the note.
 
-== Writing a slug
+= Writing a slug
 
 Root-absolute slugs begin with `/` and are resolved from `trees/`:
 
@@ -33,7 +33,7 @@ Relative slugs are resolved from the linking note's own directory:
 Prefer root-absolute. A relative link breaks the moment the file moves, which is
 exactly when you are least likely to notice.
 
-== Two names with special meaning
+= Two names with special meaning
 
 #subtree(title: "index", taxon: "observation")[
   A file called `index.typ` is a directory index — the parent of everything
@@ -50,7 +50,7 @@ exactly when you are least likely to notice.
   Dot-prefixed files are skipped the same way.
 ]
 
-== Grouping
+= Grouping
 
 Directories are the grouping mechanism, and they nest as deeply as you like.
 Nothing stops a note in one directory from linking to a note in another —

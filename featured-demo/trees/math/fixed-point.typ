@@ -51,7 +51,7 @@ How that works, and when it is a bad idea, is at the bottom of this page.
   from the space.
 ]
 
-== Two ways to write mathematics
+= Two ways to write mathematics
 
 Native Typst maths needs nothing added, and is what every formula above uses:
 
@@ -84,7 +84,7 @@ which writes the loader into `import-math.html`. This forest has done that,
 which is the only reason the formula above appears. A site that never uses `tex`
 makes no request to a maths CDN at all.
 
-== Diagrams
+= Diagrams
 
 Typst packages work normally. `auto-frame` renders a diagram to SVG and
 `auto-figure` wraps it so it behaves in both HTML and paged output:
@@ -107,7 +107,7 @@ Typst packages work normally. `auto-frame` renders a diagram to SVG and
 Formulas and diagrams are both recoloured to match the page, so they do not
 arrive as black-on-white rectangles pasted onto a parchment background.
 
-== Numbering
+= Numbering
 
 Every subtree and embed takes `numbering`, off by default. Turning it on
 prefixes the *taxon* with a counter, which is what produces `Definition 1.` and
@@ -136,7 +136,7 @@ Two details of how the counter behaves:
   on, so a definition with numbered sub-remarks reads the way it would on paper.
 ]
 
-=== Why the rest of this forest does not use it
+== Why the rest of this forest does not use it
 
 A number is a property of *where a note is rendered*, not of the note. Embed the
 same note in two pages and it takes a different number in each — first on one
@@ -153,7 +153,7 @@ The alternative is the one #local("/guide/links") describes. Writing
 and means the same thing from every page — which is what the slug being the
 address space buys you.
 
-=== The two combine, and that is the arrangement to want
+== The two combine, and that is the arrangement to want
 
 They are orthogonal, so there is no choice to make between them:
 

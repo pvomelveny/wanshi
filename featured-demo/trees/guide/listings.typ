@@ -13,7 +13,7 @@ A listing is a query against the note graph, resolved after every note has been
 read. Write one instead of a hand-maintained list of links and it stays correct
 as the forest grows.
 
-== children
+= children
 
 Every note whose parent is this one. The usual content of a directory index:
 
@@ -23,7 +23,7 @@ Every note whose parent is this one. The usual content of a directory index:
 
 #local("/guide/index") uses exactly that.
 
-== recent
+= recent
 
 The most recently dated notes anywhere in the forest:
 
@@ -36,7 +36,7 @@ The most recently dated notes anywhere in the forest:
 `include-indexes: false` leaves out directory index pages, which are usually
 navigation rather than news. It works on every listing helper.
 
-== by-taxon
+= by-taxon
 
 Everything sharing a taxon — how a bibliography page is built:
 
@@ -46,7 +46,7 @@ Everything sharing a taxon — how a bibliography page is built:
 
 #by-taxon("reference", title: "References in this forest")
 
-== orphans
+= orphans
 
 Notes nothing links to and nothing embeds. Written, then lost track of:
 
@@ -59,7 +59,7 @@ Notes nothing links to and nothing embeds. Written, then lost track of:
 If that listing is not empty, `trees/strays/` is why — it holds a note left
 deliberately unlinked so this page has something to show.
 
-== The general form
+= The general form
 
 All four are thin wrappers over `query`, which exposes the rest:
 
@@ -86,7 +86,7 @@ relationships do not line up with what you want to list:
 
 #query(from: "guide/", sort: "title", title: "Everything under guide/", include-indexes: false)
 
-== A caveat worth knowing
+= A caveat worth knowing
 
 Listings do not create links. A note that appears only in a listing is still an
 orphan, because nothing points *at* it — which is why the orphan listing above

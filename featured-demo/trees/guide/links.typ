@@ -14,7 +14,7 @@
 
 Three kinds of connection, each written differently.
 
-== Internal links
+= Internal links
 
 `local` takes a slug and renders the target's own title:
 
@@ -37,7 +37,7 @@ Because the plain form renders the *target's* title, retitling a note updates
 every sentence that links to it. That is worth preferring where the grammar
 allows it.
 
-== External links
+= External links
 
 `external` takes a URL and the text to show:
 
@@ -48,7 +48,7 @@ allows it.
 #external("https://typst.app", "Typst") — external links leave the graph
 entirely. They generate no backlink and appear in no listing.
 
-== References
+= References
 
 A note marked `asref` is treated as a citation rather than an inline link: it
 collects in the footer instead of interrupting the sentence. The notes under
@@ -69,7 +69,7 @@ Set it per note:
 or for the whole site with `asref = true` under `[build]`, which makes *every*
 linked note behave this way.
 
-== Backlinks
+= Backlinks
 
 Backlinks are automatic and need no syntax: link to a note and that note gains a
 backlink to you. This page links #local("/guide/slugs"), so `guide/slugs` lists
@@ -80,7 +80,7 @@ on a note that would otherwise show one; `"asback": "false"` stops a note's
 outbound links from generating backlinks at all, which suits an index page whose
 job is to link everything without cluttering what it links.
 
-== Footers
+= Footers
 
 Both references and backlinks render in the footer. `[build].footer-mode`
 chooses how:

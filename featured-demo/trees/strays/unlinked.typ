@@ -19,7 +19,7 @@ on a page you actually read is how they come back.
 Note that this page linking *out* to the guide does not rescue it. Orphanhood is
 about inbound links.
 
-== But there is a breadcrumb right above this
+= But there is a breadcrumb right above this
 
 Look at the top of this page: a trail leading back to the root index. If it can
 be reached from there, in what sense is it an orphan?

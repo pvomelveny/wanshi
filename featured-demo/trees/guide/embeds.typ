@@ -21,7 +21,7 @@ second place; it does not move or copy it.
 
 #embed("/refs/typst", "Typst, embedded here in full")
 
-== Options
+= Options
 
 ```typst
 #embed("/refs/typst", "A title", numbering: true, open: false, catalog: false)
@@ -35,7 +35,7 @@ Collapsed, with no catalog entry:
 
 #embed("/refs/knuth-1984", "Knuth, collapsed", open: false, catalog: false)
 
-== Embedding and parents
+= Embedding and parents
 
 Embedding a note makes the embedding page its parent. That is the part worth
 knowing before embedding widely, because it rearranges the breadcrumb trail
@@ -56,7 +56,7 @@ declares one:
 
 An explicit `parent` beats an embedding one and never loses to it.
 
-== Embeds chain
+= Embeds chain
 
 An embedded note may embed one of its own, and the whole chain renders in
 place. The block below is #local("/guide/chain-middle"), which embeds
@@ -89,7 +89,7 @@ points at the note that embeds it, not at this page.
   is assembled from four or five files written weeks apart.
 ]
 
-=== Embedding the same note in several places
+== Embedding the same note in several places
 
 Nothing stops it, and it is often the point — a definition used by three
 arguments should be written once and shown in all three. Each page renders it in
@@ -113,7 +113,7 @@ The one-parent rule only constrains the breadcrumb. Backlinks stay many-to-many,
 so all the embedding pages remain visible from the note regardless of which one
 became its parent.
 
-== When to embed instead of writing inline
+= When to embed instead of writing inline
 
 Embed when the material is genuinely its own note — something you would want to
 link to, cite, or find in a listing — but which also belongs in the middle of

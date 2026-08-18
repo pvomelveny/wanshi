@@ -12,7 +12,7 @@
 A subtree is a note defined inside another note's file. It gets its own heading
 and its own place in the table of contents, without needing a file.
 
-== Anonymous subtrees
+= Anonymous subtrees
 
 With no slug, a subtree is part of this page and nothing else. It cannot be
 linked to, and does not appear in listings:
@@ -28,7 +28,7 @@ linked to, and does not appear in listings:
   in the sidebar, but no other note can point at it.
 ]
 
-== Named subtrees
+= Named subtrees
 
 Give it a slug and it becomes addressable — a real note that happens to live
 inside this file:
@@ -50,7 +50,7 @@ written inside `trees/guide/subtrees.typ`, `subtrees-named` becomes
 `guide/subtrees-named`. Spelling out the directory is an error — a slug
 containing `/` is rejected with a message saying so.
 
-== Semantic helpers
+= Semantic helpers
 
 The bundled library wraps `subtree` for the taxons that come up most, so the
 common case reads as what it is:
@@ -73,7 +73,7 @@ use.
   identical.
 ]
 
-== Nesting
+= Nesting
 
 Subtrees nest. Put one inside another and the page renders it as a section
 within a section, indented, with its own collapse control; the table of contents
@@ -119,7 +119,7 @@ indents to match, so the structure is legible from the sidebar alone.
   is a statement about reading order, not about the address space.
 ]
 
-== Subtree or separate file?
+= Subtree or separate file?
 
 A separate file when the note stands on its own, has its own citations, or you
 expect to link to it from elsewhere. A subtree when it only makes sense in the

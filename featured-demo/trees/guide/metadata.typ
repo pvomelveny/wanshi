@@ -27,7 +27,7 @@ block at the top of `trees/guide/metadata.typ`:
 ))
 ```
 
-== Structural keys
+= Structural keys
 
 `title` and `taxon` set the heading. `date` is conventional but privileged: it
 gets its own column, and it is the natural sort key for listings and feeds.
@@ -47,7 +47,7 @@ Booleans are the *strings* `"true"` and `"false"`, never bare Typst booleans:
 An unrecognised value fails the build and names the note and the key, so a typo
 here is loud rather than silent.
 
-== Custom keys
+= Custom keys
 
 Anything not structural is a custom key. `status` above is one. Custom keys are
 preserved in `wanshi.json` and usable as a sort key or a query filter.
@@ -68,13 +68,13 @@ above is a real link, resolved like any other:
 That is the one place metadata and the note graph meet: a link written inside
 metadata still creates a backlink on its target.
 
-== Taxons
+= Taxons
 
 A taxon is a display category — `definition`, `remark`, `theorem`, `reference`.
 It carries no behaviour on its own, but listings can filter on it, which is how
 #local("/refs/index") collects its entries.
 
-=== They are free-form
+== They are free-form
 
 There is no fixed set. A taxon is an ordinary string, rendered with its first
 letter capitalised and a period appended. Invent one whenever the vocabulary you
@@ -103,7 +103,7 @@ wrapper that fills in `taxon:` on a `subtree` call, so `#theorem(..)` and
 `#subtree(taxon: "theorem", ..)` produce identical output. They save typing;
 they do not constrain.
 
-=== Two things to know
+== Two things to know
 
 #subtree(title: "`reference` is the one reserved word", taxon: "observation")[
   Any taxon beginning with `reference` marks a note as a citation, which changes

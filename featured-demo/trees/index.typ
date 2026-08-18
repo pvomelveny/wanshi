@@ -29,11 +29,11 @@ wanshi build    # write ./publish
   references, which collect in a footer rather than appearing inline.
 ]
 
-== The sections
+= The sections
 
 #children(sort: "slug", title: none)
 
-== Everything, newest first
+= Everything, newest first
 
 This listing is generated, not maintained. It updates when notes are added or
 their dates change, which is the point of #local("/guide/listings").
