@@ -3,6 +3,7 @@
 // Authors: Alias Qli (@AliasQli), Spore (@s-cerevisiae), Kokic (@kokic)
 
 use super::anonymous_slug::AnonymousSlugState;
+use super::heading_sections::split_heading_sections;
 use super::subtree_slug::{ensure_unique_section_slugs, resolve_subtree_slug};
 use camino::Utf8Path;
 use eyre::{eyre, WrapErr};
@@ -114,6 +115,15 @@ fn parse_typst_html(
                 let url = attr(KEY_SLUG)?.to_string();
                 let text = value();
                 builder.push(LazyContent::Local(LocalLink { url, text }))
+            }
+            HTMLTagKind::Outdent => {
+                if !allow_subtree {
+                    return Err(eyre!(
+                        "typst outdent tag is not allowed in metadata value while parsing `{}`",
+                        source_slug
+                    ));
+                }
+                builder.push(LazyContent::Outdent)
             }
             HTMLTagKind::Query => {
                 if !allow_subtree {
@@ -316,14 +326,49 @@ fn parse_typst_sections_from_html(
     };
     let content = parse_typst_html(&mut ctx, html_str, source_slug, &mut metadata, true)?;
 
-    let mut sections = vec![(
+    // Turn each content stream's headings into sections. Every stream is split
+    // on its own, which is what keeps `#outdent()` from escaping the subtree it
+    // was written in: it can only close frames this pass opened.
+    let mut sections = Vec::with_capacity(subtree_sections.len() + 1);
+    let mut heading_sections = Vec::new();
+
+    let split = split_heading_sections(
+        content,
+        source_slug,
+        source_slug,
+        ext,
+        &mut used_slugs,
+        &mut anonymous_slugs,
+    );
+    heading_sections.extend(split.sections);
+    sections.push((
         source_slug,
         UnresolvedSection {
             metadata: HTMLMetaData(metadata),
-            content,
+            content: split.content,
         },
-    )];
-    sections.extend(subtree_sections);
+    ));
+
+    for (slug, section) in subtree_sections {
+        let split = split_heading_sections(
+            section.content,
+            slug,
+            source_slug,
+            ext,
+            &mut used_slugs,
+            &mut anonymous_slugs,
+        );
+        heading_sections.extend(split.sections);
+        sections.push((
+            slug,
+            UnresolvedSection {
+                content: split.content,
+                metadata: section.metadata,
+            },
+        ));
+    }
+
+    sections.extend(heading_sections);
     ensure_unique_section_slugs(&sections, source_slug, "typst subtree")?;
     Ok(sections)
 }

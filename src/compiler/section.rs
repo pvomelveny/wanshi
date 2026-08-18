@@ -135,6 +135,12 @@ pub enum LazyContent {
     Embed(EmbedContent),
     Local(LocalLink),
     Query(QuerySpec),
+    /// `#outdent()`: closes the innermost heading section open at this point.
+    ///
+    /// Carries nothing — its position in the stream is its whole meaning. It is
+    /// consumed by [`super::heading_sections`] while the note is still being
+    /// parsed, so a section never reaches compilation holding one.
+    Outdent,
 }
 
 pub type LazyContents = Vec<LazyContent>;
@@ -203,6 +209,8 @@ impl HTMLContent {
                         // A listing contributes no text of its own before it is
                         // resolved against the graph.
                         LazyContent::Query(_) => String::new(),
+                        // Pure structure, and gone before compilation anyway.
+                        LazyContent::Outdent => String::new(),
                     };
                     str.push_str(&s);
                 }

@@ -201,6 +201,12 @@ impl CompileState {
                         LazyContent::Query(spec) => {
                             children.push(SectionContent::Query(spec.clone()));
                         }
+                        // `split_heading_sections` consumes these while the note
+                        // is still being parsed. Reaching one here would mean a
+                        // section skipped that pass; drop it rather than panic,
+                        // so a cache written before it existed cannot crash a
+                        // build.
+                        LazyContent::Outdent => {}
                         LazyContent::Local(local_link) => {
                             let link_slug = subsection_slug(slug, &local_link.url);
 
@@ -355,10 +361,25 @@ impl CompileState {
             })
             .collect();
 
+        // Where each internal section's edges should be re-attributed to. An
+        // edge recorded against a section that is about to be deleted has to be
+        // lifted to the nearest section that survives, not dropped: the note a
+        // reader sees is the one that did the linking, and to them the link was
+        // written by the page. Dropping instead would mean a `#local` after a
+        // heading silently produced no backlink at all.
+        let visible_hosts: HashMap<Slug, Option<Slug>> = internal_slugs
+            .iter()
+            .map(|&slug| {
+                (
+                    slug,
+                    Self::resolve_visible_parent(Some(slug), &self.callback.0, &internal_slugs),
+                )
+            })
+            .collect();
+
         for (&slug, value) in &mut self.callback.0 {
-            value
-                .backlinks
-                .retain(|backlink| !internal_slugs.contains(backlink));
+            value.backlinks = lift_edges(&value.backlinks, slug, &visible_hosts);
+            value.embedded_by = lift_edges(&value.embedded_by, slug, &visible_hosts);
             if let Some(&parent) = normalized_parents.get(&slug) {
                 value.parent = parent;
             }
@@ -447,6 +468,31 @@ pub(super) fn nearest_directory_index(slug: Slug, exists: impl Fn(Slug) -> bool)
     }
 
     root
+}
+
+/// Re-attribute edges away from sections that are about to be deleted.
+///
+/// An edge naming an internal section becomes one naming the nearest section
+/// that survives publication. `visible_hosts` holds that mapping for every
+/// internal slug; anything absent from it is already visible and passes through.
+///
+/// Two things are dropped rather than lifted: an internal section with no
+/// visible host at all, and an edge that after lifting would point `owner` at
+/// itself — which is what a note linking to its own page from inside one of its
+/// headings would otherwise produce.
+fn lift_edges(
+    edges: &HashSet<Slug>,
+    owner: Slug,
+    visible_hosts: &HashMap<Slug, Option<Slug>>,
+) -> HashSet<Slug> {
+    edges
+        .iter()
+        .filter_map(|edge| match visible_hosts.get(edge) {
+            Some(host) => *host,
+            None => Some(*edge),
+        })
+        .filter(|edge| *edge != owner)
+        .collect()
 }
 
 /// Calculate the slug of a subsection referenced by the current file, from the `url` referencing
@@ -768,8 +814,12 @@ mod tests {
         assert!(!state.callback().0.contains_key(&Slug::new("anon")));
     }
 
+    /// A link written inside a section that is not published still happened, and
+    /// to a reader it was written by the page. It is re-attributed there rather
+    /// than discarded — which is what used to happen, so a `#local` inside an
+    /// anonymous subtree produced no backlink at all.
     #[test]
-    fn test_compile_filters_internal_anonymous_backlinks_from_targets() {
+    fn test_compile_lifts_internal_anonymous_backlinks_to_the_visible_host() {
         let mut shallows = HashMap::new();
         shallows.insert(
             Slug::new("index"),
@@ -801,10 +851,108 @@ mod tests {
         );
 
         let state = compile_all_without_missing_index_warning(&shallows).unwrap();
-        let maybe_target_callback = state.callback().0.get(&Slug::new("target"));
-        assert!(maybe_target_callback
-            .map(|value| value.backlinks.is_empty())
-            .unwrap_or(true));
+        let backlinks = &state
+            .callback()
+            .0
+            .get(&Slug::new("target"))
+            .expect("target should have a callback entry")
+            .backlinks;
+        assert_eq!(
+            backlinks,
+            &HashSet::from([Slug::new("index")]),
+            "the backlink should name the page, not the deleted anonymous section"
+        );
+    }
+
+    /// The same lifting for the embed edge. Without it every note embedded after
+    /// a heading loses its "Found in" entry, because the section that embedded
+    /// it is one the reader never sees.
+    #[test]
+    fn test_compile_lifts_internal_anonymous_embedded_by_to_the_visible_host() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("index"),
+            shallow_with_content(
+                "index",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/anon".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+
+        let mut anon = shallow_with_content(
+            "anon",
+            HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                url: "/target".to_string(),
+                title: None,
+                option: SectionOption::default(),
+            })]),
+        );
+        anon.metadata.0.insert(
+            KEY_INTERNAL_ANON_SUBTREE.to_string(),
+            HTMLContent::Plain("true".to_string()),
+        );
+        shallows.insert(Slug::new("anon"), anon);
+        shallows.insert(
+            Slug::new("target"),
+            shallow_with_content("target", HTMLContent::Plain("<p>target</p>".to_string())),
+        );
+
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+        let embedded_by = &state
+            .callback()
+            .0
+            .get(&Slug::new("target"))
+            .expect("target should have a callback entry")
+            .embedded_by;
+        assert_eq!(embedded_by, &HashSet::from([Slug::new("index")]));
+    }
+
+    /// Lifting can point an edge at the page it started from — a note linking to
+    /// itself from inside one of its own headings. A page is not its own
+    /// backlink, so that one is dropped rather than lifted.
+    #[test]
+    fn test_compile_drops_lifted_edges_that_point_at_their_own_page() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("index"),
+            shallow_with_content(
+                "index",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/anon".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+
+        let mut anon = shallow_with_content(
+            "anon",
+            HTMLContent::Lazy(vec![LazyContent::Local(LocalLink {
+                url: "/index".to_string(),
+                text: None,
+            })]),
+        );
+        anon.metadata.0.insert(
+            KEY_INTERNAL_ANON_SUBTREE.to_string(),
+            HTMLContent::Plain("true".to_string()),
+        );
+        shallows.insert(Slug::new("anon"), anon);
+
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+        let backlinks = state
+            .callback()
+            .0
+            .get(&Slug::new("index"))
+            .map(|value| value.backlinks.clone())
+            .unwrap_or_default();
+        assert!(
+            backlinks.is_empty(),
+            "index should not backlink to itself, got {:?}",
+            backlinks
+        );
     }
 
     #[test]

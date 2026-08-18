@@ -16,7 +16,12 @@ pub enum HTMLTagKind {
     Embed,
     Subtree,
     Query,
-    Local { span: bool },
+    Local {
+        span: bool,
+    },
+    /// Closes the innermost open heading section. Carries nothing: the tag's
+    /// position in the content stream is the whole of its meaning.
+    Outdent,
 }
 
 impl HTMLTagKind {
@@ -26,6 +31,7 @@ impl HTMLTagKind {
             "embed" => Some(HTMLTagKind::Embed),
             "subtree" => Some(HTMLTagKind::Subtree),
             "query" => Some(HTMLTagKind::Query),
+            "outdent" => Some(HTMLTagKind::Outdent),
             "local" => Some(HTMLTagKind::Local { span }),
             _ => None,
         }
@@ -36,7 +42,8 @@ impl HTMLTagKind {
             (HTMLTagKind::Meta, HTMLTagKind::Meta)
             | (HTMLTagKind::Embed, HTMLTagKind::Embed)
             | (HTMLTagKind::Subtree, HTMLTagKind::Subtree)
-            | (HTMLTagKind::Query, HTMLTagKind::Query) => Some(true),
+            | (HTMLTagKind::Query, HTMLTagKind::Query)
+            | (HTMLTagKind::Outdent, HTMLTagKind::Outdent) => Some(true),
             (HTMLTagKind::Local { span: a }, HTMLTagKind::Local { span: b }) => {
                 if a == b {
                     Some(true)
@@ -75,8 +82,15 @@ impl<'a> HTMLParser<'a> {
             fn real(alt: u8) -> String {
                 format!(r#"?<real{}>"#, alt)
             }
+            // Must list every name [`HTMLTagKind::new`] accepts. A name missing
+            // here never matches, so the tag is copied into the output verbatim
+            // rather than failing — silent, and only visible in the rendered
+            // page.
             fn wanshi(alt: u8) -> String {
-                format!(r#"wanshi-(?<tag{}>meta|embed|subtree|local|query)"#, alt)
+                format!(
+                    r#"wanshi-(?<tag{}>meta|embed|subtree|local|query|outdent)"#,
+                    alt
+                )
             }
             fn local(alt: u8) -> String {
                 format!(r#"wanshi-(?<tag{}>local)"#, alt)
@@ -251,5 +265,47 @@ impl<'a> Iterator for HTMLParser<'a> {
             attrs,
             body: self.html_str[open_tag.end..close_tag.start].trim(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn kinds(html: &str) -> Vec<HTMLTagKind> {
+        HTMLParser::new(html).map(|m| m.unwrap().kind).collect()
+    }
+
+    /// The tag names live in two places — the regex in [`HTMLParser::new`] and
+    /// the match in [`HTMLTagKind::new`] — and a name in the second but not the
+    /// first fails silently: the element matches nothing, so it is copied
+    /// straight through and shows up as raw markup in the finished page. This
+    /// walks every name the enum accepts and checks the parser also sees it.
+    #[test]
+    fn test_every_tag_kind_is_reachable_through_the_parser() {
+        for name in ["meta", "embed", "subtree", "query", "local", "outdent"] {
+            assert!(
+                HTMLTagKind::new(name, false).is_some(),
+                "`{name}` is not a tag kind; fix the test or the list"
+            );
+            let html = format!("<wanshi-{name}></wanshi-{name}>");
+            assert_eq!(
+                kinds(&html).len(),
+                1,
+                "`wanshi-{name}` parsed as no tag — the regex in HTMLParser::new \
+                 is missing it, and it would render as raw markup"
+            );
+        }
+    }
+
+    #[test]
+    fn test_outdent_parses_with_no_attributes_or_body() {
+        let parsed = HTMLParser::new("a<wanshi-outdent></wanshi-outdent>b")
+            .map(|m| m.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0].kind, HTMLTagKind::Outdent));
+        assert!(parsed[0].body.is_empty());
+        assert!(parsed[0].attrs.is_empty());
     }
 }

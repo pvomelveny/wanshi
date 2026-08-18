@@ -270,6 +270,22 @@
   }
 })
 
+// Close the innermost open heading section.
+//
+// A heading opens a section that everything after it belongs to, and the usual
+// way out is another heading at the same level. This is for when you want out
+// without writing one — an embed that belongs to the note as a whole after the
+// headings have started, say. Each call steps out one level; calling it with no
+// heading open does nothing.
+//
+// Nothing is drawn, in either target: it is a statement about structure, and
+// paged output has no wanshi sections to structure.
+#let outdent() = with-target-check((export-target) => {
+  if export-target == "html" {
+    html.elem("wanshi-outdent", "")
+  }
+})
+
 // Semantic subtree sugar helpers for common note taxons.
 #let exegesis(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
   slug: slug,
