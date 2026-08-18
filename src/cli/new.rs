@@ -225,7 +225,7 @@ fn new_section_inner(path: &Utf8Path, template: &str, config: &Utf8Path) -> eyre
             section_relative_path
         )
     })?;
-    let content = content.replace("<FILE_NAME>", filestem);
+    let content = substitute_file_name(&content, filestem);
 
     let section_path = environment::trees_dir().join(&section_relative_path);
 
@@ -247,6 +247,120 @@ fn new_section_inner(path: &Utf8Path, template: &str, config: &Utf8Path) -> eyre
     println!("Created new section at: {}", section_path);
 
     Ok(())
+}
+
+/// The placeholder `wanshi new post` replaces with the new file's stem.
+const FILE_NAME_PLACEHOLDER: &str = "<FILE_NAME>";
+
+/// Substitute [`FILE_NAME_PLACEHOLDER`] everywhere in a template *except* inside
+/// comments.
+///
+/// A plain `str::replace` also rewrites the placeholder where a template
+/// *documents* itself — a comment reading "the title placeholder below is
+/// replaced with the file's stem" came out as "the title monoids below is
+/// replaced …". A template that cannot explain its own placeholder without
+/// having it clobbered is a poor template.
+///
+/// String literals are deliberately *not* skipped: the placeholder's usual home
+/// is inside one (`"title": "<FILE_NAME>"`). They are tracked only so that a
+/// `//` or `/*` appearing in a string is not mistaken for the start of a
+/// comment.
+///
+/// Typst block comments nest, so the depth is counted rather than treated as a
+/// flag.
+fn substitute_file_name(content: &str, filestem: &str) -> String {
+    #[derive(Clone, Copy)]
+    enum State {
+        Code,
+        Str,
+        LineComment,
+        BlockComment(usize),
+    }
+
+    let mut out = String::with_capacity(content.len());
+    let mut state = State::Code;
+    let bytes = content.as_bytes();
+    let mut i = 0;
+
+    while i < content.len() {
+        // Only ever advance to a char boundary, so slicing below is safe.
+        let rest = &content[i..];
+        match state {
+            State::Code => {
+                if rest.starts_with("//") {
+                    state = State::LineComment;
+                    out.push_str("//");
+                    i += 2;
+                } else if rest.starts_with("/*") {
+                    state = State::BlockComment(1);
+                    out.push_str("/*");
+                    i += 2;
+                } else if rest.starts_with(FILE_NAME_PLACEHOLDER) {
+                    out.push_str(filestem);
+                    i += FILE_NAME_PLACEHOLDER.len();
+                } else {
+                    if bytes[i] == b'"' {
+                        state = State::Str;
+                    }
+                    let c = rest.chars().next().expect("non-empty by loop condition");
+                    out.push(c);
+                    i += c.len_utf8();
+                }
+            }
+            State::Str => {
+                if bytes[i] == b'\\' {
+                    // Copy the escape and whatever it escapes, together.
+                    let mut chars = rest.chars();
+                    let bs = chars.next().expect("non-empty by loop condition");
+                    out.push(bs);
+                    i += bs.len_utf8();
+                    if let Some(escaped) = chars.next() {
+                        out.push(escaped);
+                        i += escaped.len_utf8();
+                    }
+                } else if rest.starts_with(FILE_NAME_PLACEHOLDER) {
+                    out.push_str(filestem);
+                    i += FILE_NAME_PLACEHOLDER.len();
+                } else {
+                    if bytes[i] == b'"' {
+                        state = State::Code;
+                    }
+                    let c = rest.chars().next().expect("non-empty by loop condition");
+                    out.push(c);
+                    i += c.len_utf8();
+                }
+            }
+            State::LineComment => {
+                let c = rest.chars().next().expect("non-empty by loop condition");
+                if c == '\n' {
+                    state = State::Code;
+                }
+                out.push(c);
+                i += c.len_utf8();
+            }
+            State::BlockComment(depth) => {
+                if rest.starts_with("/*") {
+                    state = State::BlockComment(depth + 1);
+                    out.push_str("/*");
+                    i += 2;
+                } else if rest.starts_with("*/") {
+                    state = if depth == 1 {
+                        State::Code
+                    } else {
+                        State::BlockComment(depth - 1)
+                    };
+                    out.push_str("*/");
+                    i += 2;
+                } else {
+                    let c = rest.chars().next().expect("non-empty by loop condition");
+                    out.push(c);
+                    i += c.len_utf8();
+                }
+            }
+        }
+    }
+
+    out
 }
 
 fn normalize_new_section_path(path: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
@@ -378,5 +492,58 @@ mod tests {
             "content/trees",
         );
         assert_eq!(stripped, Utf8PathBuf::from("notes/a.typst"));
+    }
+
+    #[test]
+    fn test_substitute_file_name_replaces_in_code_and_strings() {
+        let out = substitute_file_name(r#"#metadata(("title": "<FILE_NAME>"))"#, "monoids");
+        assert_eq!(out, r#"#metadata(("title": "monoids"))"#);
+    }
+
+    #[test]
+    fn test_substitute_file_name_skips_line_comments() {
+        // A template documenting its own placeholder must survive intact.
+        let template = "// replaced with <FILE_NAME> on creation\n\"<FILE_NAME>\"";
+        let out = substitute_file_name(template, "monoids");
+        assert_eq!(out, "// replaced with <FILE_NAME> on creation\n\"monoids\"");
+    }
+
+    #[test]
+    fn test_substitute_file_name_skips_block_comments() {
+        let out = substitute_file_name("/* <FILE_NAME> */ <FILE_NAME>", "alice");
+        assert_eq!(out, "/* <FILE_NAME> */ alice");
+    }
+
+    #[test]
+    fn test_substitute_file_name_handles_nested_block_comments() {
+        // Typst block comments nest, so the inner close must not end the outer.
+        let out = substitute_file_name("/* a /* <FILE_NAME> */ b */ <FILE_NAME>", "alice");
+        assert_eq!(out, "/* a /* <FILE_NAME> */ b */ alice");
+    }
+
+    #[test]
+    fn test_substitute_file_name_ignores_comment_markers_inside_strings() {
+        // "//" in a string does not start a comment, so the later placeholder
+        // is still substituted.
+        let out = substitute_file_name(r#""http://x" <FILE_NAME>"#, "alice");
+        assert_eq!(out, r#""http://x" alice"#);
+    }
+
+    #[test]
+    fn test_substitute_file_name_handles_escaped_quote_in_string() {
+        let out = substitute_file_name(r#""a\"b" <FILE_NAME>"#, "alice");
+        assert_eq!(out, r#""a\"b" alice"#);
+    }
+
+    #[test]
+    fn test_substitute_file_name_preserves_multibyte_content() {
+        let out = substitute_file_name("// 参考 <FILE_NAME>\n\"<FILE_NAME>\" — é", "alice");
+        assert_eq!(out, "// 参考 <FILE_NAME>\n\"alice\" — é");
+    }
+
+    #[test]
+    fn test_substitute_file_name_replaces_every_occurrence_outside_comments() {
+        let out = substitute_file_name("<FILE_NAME> and <FILE_NAME>", "alice");
+        assert_eq!(out, "alice and alice");
     }
 }
