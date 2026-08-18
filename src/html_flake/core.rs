@@ -20,8 +20,9 @@ pub fn html_article_inner(
     open: bool,
     adhoc_title: Option<&str>,
     adhoc_taxon: Option<&str>,
+    level: u8,
 ) -> eyre::Result<String> {
-    let summary = metadata.to_header(adhoc_title, adhoc_taxon, !hide_metadata)?;
+    let summary = metadata.to_header(adhoc_title, adhoc_taxon, !hide_metadata, level)?;
 
     let article_id = metadata.id()?;
     Ok(html_section(
@@ -34,8 +35,13 @@ pub fn html_article_inner(
     ))
 }
 
+/// A footer block — "References", "Backlinks".
+///
+/// `h2`, not `h1`: these sit below the article, so one level under the page's
+/// own title. It also revives `footer h2` in the stylesheet, which matched
+/// nothing while this emitted `h1`.
 pub fn html_footer_section(id: &str, summary: &str, content: &String) -> String {
-    let summary = format!("<header><h1>{}</h1></header>", summary);
+    let summary = format!("<header><h2>{}</h2></header>", summary);
     let inner_html = format!("{}{}", (html!(summary { (summary) })), content);
     let html_details = format!("<details open>{}</details>", inner_html);
     html!(section class="block link-list" id={id} { (html_details) })
@@ -115,10 +121,15 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
     })
 }
 
+/// The table of contents in the sidebar.
+///
+/// `h2` with its own class: it sits in a `<nav>` beside the article, not above
+/// it, so it is not the page's `h1`. The class is needed because it used to be
+/// sized by `details h1`, which now matches section titles only.
 pub fn html_catalog_block(items: &str) -> String {
     let toc_text = environment::get_toc_text();
     html!(div class="block" {
-        details open="" { summary { h1 { (toc_text) } } (items) }
+        details open="" { summary { h2 class="toc-title" { (toc_text) } } (items) }
     })
 }
 
@@ -149,8 +160,13 @@ pub fn html_query_item(
 }
 
 /// Wrapper around a listing's rows, with an optional heading.
+///
+/// The title is `h2` for the same reason Typst emits `h2` for `= `: it sits
+/// inside a section whose own title is `h1`, so it is one level down. Listings
+/// are substituted into the section's body before rendering, so the same
+/// depth shift that moves Typst's headings moves this one too.
 pub fn html_query_block(title: Option<&str>, items_html: &str) -> String {
-    let heading = title.map_or(String::new(), |t| html!(h1 class="query-title" { (t) }));
+    let heading = title.map_or(String::new(), |t| html!(h2 class="query-title" { (t) }));
     html!(div class="block query" {
         (heading)
         ul class="block" { (items_html) }

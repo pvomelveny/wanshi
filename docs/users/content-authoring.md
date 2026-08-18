@@ -78,6 +78,34 @@ Everything after that is ordinary Typst, compiled by your local `typst`
 installation, so the whole language and the Typst Universe package ecosystem are
 available.
 
+## Headings and the Document Outline
+
+Typst headings work normally inside a note — `=`, `==`, and so on. wanshi does not
+turn them into sections: they get no slug, no page, and no table-of-contents row.
+They are typography and document structure, not identity.
+
+What wanshi does control is the **level** each heading is emitted at. A section's
+title is `h{depth}`, where depth is its nesting on the page being rendered: the
+page's own note is `h1`, a note embedded in it is `h2`, one embedded inside that
+is `h3`. Typst's own headings inside a section are pushed down by the same amount,
+so they stay below the section that contains them.
+
+The result is one `h1` per page and an outline that matches what a reader sees.
+
+Two consequences worth knowing:
+
+- **A note's heading levels depend on where it is rendered.** The same note is
+  `h1` on its own page and `h3` when embedded two levels deep. That is correct —
+  an outline describes a page, not a note — but it means you cannot rely on a
+  fixed level.
+- **Start a note's headings at `=`, not `==`.** Typst maps `=` to `h2`, directly
+  below a note's `h1` title. Starting at `==` skips a level, which strict
+  accessibility checkers flag.
+
+Nesting deeper than six levels clamps at `h6`, which is the deepest heading HTML
+defines. Typst's `======` is not emitted as a heading element at all — it becomes
+a `<div role="heading">` — so it is left alone.
+
 ## Metadata Reference
 
 ### Identity and Display

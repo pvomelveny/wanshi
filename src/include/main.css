@@ -312,7 +312,11 @@ details>summary::-webkit-details-marker {
   display: none;
 }
 
-details h1 {
+/* Keyed on the class, not the tag: a section title's level now varies with its
+   nesting depth, and a tag selector would also catch the Typst headings that
+   share that level. */
+details .section-title,
+.toc-title {
   font-size: var(--details-h1-font-size);
   display: inline;
 }
@@ -344,7 +348,7 @@ span.taxon {
   font-style: italic;
 }
 
-article>section>details>summary>header>h1 {
+article>section>details>summary>header>.section-title {
   font-size: var(--article-details-h1-font-size);
 }
 
@@ -370,7 +374,7 @@ article>section>details>summary>header {
   margin-bottom: 0.5em;
 }
 
-article>section>details>summary>header>h1>.taxon {
+article>section>details>summary>header>.section-title>.taxon {
   display: inline-block;
   font-size: var(--article-details-h1-taxon-font-size);
   color: var(--article-taxon-color);
@@ -464,13 +468,13 @@ ol {
    with `i` — a note may declare "Reference" or "reference" and mean the same
    thing. This used to rely on the attribute always being capitalized, which was
    only true while the display form was stored in the metadata. */
-section section[data-taxon="Reference" i]>details>summary>header>h1>.taxon,
-section section[data-taxon="Person" i]>details>summary>header>h1>.taxon {
+section section[data-taxon="Reference" i]>details>summary>header>.section-title>.taxon,
+section section[data-taxon="Person" i]>details>summary>header>.section-title>.taxon {
   display: none;
 }
 
-section .block[data-taxon]>header>h1,
-section .block[data-taxon] details>summary>header>h1 {
+section .block[data-taxon]>header>.section-title,
+section .block[data-taxon] details>summary>header>.section-title {
   font-size: var(--section-details-h1-font-size);
 }
 
@@ -480,7 +484,11 @@ footer>section {
   border-top: 1px solid var(--border);
 }
 
+/* Live again now that footer blocks emit `h2`; it matched nothing while they
+   emitted `h1`. `display: inline` keeps the disclosure triangle on the same
+   line, which `details h1` used to provide. */
 footer h2 {
+  display: inline;
   font-family: var(--heading-font-family);
   font-weight: 600;
   font-size: var(--footer-h2-font-size);
@@ -786,7 +794,8 @@ path.typst-shape[stroke="#000000"] {
   background-color: transparent;
 }
 
-.block.query>h1.query-title {
+/* The tag varies with nesting depth, so match the class alone. */
+.block.query>.query-title {
   font-family: var(--heading-font-family);
   font-size: 1rem;
   font-weight: 600;

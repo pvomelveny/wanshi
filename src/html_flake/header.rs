@@ -62,6 +62,25 @@ pub struct HtmlHeaderArgs<'a> {
     pub etc: &'a [(String, String)],
     /// Whether the note's custom keys appear beneath the title.
     pub show_extra: bool,
+    /// Nesting depth of this section on the page it is being rendered into: the
+    /// page's own section is 1, a section embedded in it is 2, and so on.
+    ///
+    /// The title is emitted as `h{level}` so the document outline reflects the
+    /// nesting. Every section used to emit `h1` regardless of depth, on the
+    /// HTML5 outline-algorithm assumption that nested sectioning content
+    /// re-bases the level — an algorithm no browser or screen reader ever
+    /// implemented, and since removed from the spec. A page could carry nine
+    /// sibling `h1`s describing a four-deep tree.
+    pub level: u8,
+}
+
+/// Deepest heading HTML has. Nesting past this clamps rather than inventing a
+/// level, so a very deep tree flattens at the bottom instead of emitting `h7`.
+const MAX_HEADING_LEVEL: u8 = 6;
+
+/// The `hN` tag name for a section at `level`, clamped to what HTML defines.
+pub(crate) fn heading_tag(level: u8) -> String {
+    format!("h{}", level.clamp(1, MAX_HEADING_LEVEL))
 }
 
 pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
@@ -75,6 +94,7 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
         source_pos,
         etc,
         show_extra,
+        level,
     } = args;
     let slug_str = slug.as_str();
     let source_slug = source_slug.unwrap_or(slug_str);
@@ -129,14 +149,20 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
         _ => String::default(),
     };
 
+    // Built by hand rather than with `html!`, which takes a literal tag name.
+    // The class is what the stylesheet keys on: the level now varies with depth,
+    // so a tag selector could no longer identify a section title — and worse,
+    // would start catching the Typst headings that share its level.
+    let tag = heading_tag(level);
+    let title_html = html!(span class="taxon" { (taxon) })
+        + &html!(span class="title" { (title) })
+        + " "
+        + &slug_link
+        + &hash_anchor
+        + &edit_url;
+
     html!(header {
-        h1 {
-            span class="taxon" { (taxon) }
-            span class="title" { (title) } " "
-            (slug_link)
-            (hash_anchor)
-            (edit_url)
-        }
+        (format!(r#"<{tag} class="section-title">{title_html}</{tag}>"#))
         (html_header_metadata(etc, show_extra))
     })
 }
@@ -236,6 +262,44 @@ mod tests {
     }
 
     #[test]
+    fn test_heading_tag_tracks_level_and_clamps() {
+        assert_eq!(super::heading_tag(1), "h1");
+        assert_eq!(super::heading_tag(3), "h3");
+        assert_eq!(super::heading_tag(6), "h6");
+        // HTML defines no `h7`; deep nesting flattens rather than inventing one.
+        assert_eq!(super::heading_tag(9), "h6");
+        assert_eq!(super::heading_tag(0), "h1");
+    }
+
+    #[test]
+    fn test_html_header_emits_the_level_and_a_stable_class() {
+        let etc = Vec::new();
+        let slug = Slug::new("book/child");
+        let args = |level| super::HtmlHeaderArgs {
+            title: "Title",
+            taxon: "Taxon. ",
+            slug: &slug,
+            ext: "typst",
+            show_slug: true,
+            source_slug: None,
+            source_pos: None,
+            etc: &etc,
+            show_extra: true,
+            level,
+        };
+
+        let top = super::html_header(args(1));
+        assert!(top.contains(r#"<h1 class="section-title">"#));
+        assert!(top.contains("</h1>"));
+
+        // The class is what the stylesheet keys on, precisely because the tag
+        // now varies with depth.
+        let nested = super::html_header(args(3));
+        assert!(nested.contains(r#"<h3 class="section-title">"#));
+        assert!(nested.contains("</h3>"));
+    }
+
+    #[test]
     fn test_html_header_can_hide_slug_link() {
         let etc = Vec::new();
         let html = super::html_header(super::HtmlHeaderArgs {
@@ -248,6 +312,7 @@ mod tests {
             source_pos: None,
             etc: &etc,
             show_extra: true,
+            level: 1,
         });
         assert!(!html.contains("class=\"slug\""));
         assert!(html.contains("href=\"#book-child\""));

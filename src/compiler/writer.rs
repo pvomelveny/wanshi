@@ -21,6 +21,69 @@ use super::{
     taxon::{display_taxon, Taxon},
 };
 
+/// The page's own section. Its title is the one `h1` on the page.
+const PAGE_LEVEL: u8 = 1;
+
+/// Footer blocks ("References", "Backlinks") are `h2`, so the entries listed
+/// inside them are `h3`.
+const FOOTER_ENTRY_LEVEL: u8 = 3;
+
+/// Deepest heading HTML defines.
+const MAX_HEADING_LEVEL: u8 = 6;
+
+/// Push the Typst headings in a chunk of body HTML down by its section's depth.
+///
+/// Typst maps its own `= ` to `<h2>`, reserving `h1` for the note's title — an
+/// assumption that holds for a note rendered as its own page and breaks the
+/// moment it is embedded, where the note's title is no longer `h1`. Shifting by
+/// `depth - 1` restores it: at depth 1 nothing moves, and deeper the headings
+/// follow their section down. Levels clamp at `h6` rather than inventing `h7`.
+///
+/// Scans rather than matching a regex: `<h` must be followed by an ASCII digit,
+/// so Typst's own `<head>` — which `typst_cli::html_to_body_content` leaves in
+/// the content — can never match. `<h1 class="query-title">` from a resolved
+/// listing is a real heading and shifts with the rest.
+fn shift_heading_levels(html: &str, depth: u8) -> String {
+    let shift = depth.saturating_sub(1);
+    if shift == 0 || html.is_empty() {
+        return html.to_string();
+    }
+
+    let bytes = html.as_bytes();
+    let mut out = String::with_capacity(html.len());
+    let mut cursor = 0;
+
+    while let Some(found) = html[cursor..].find('<') {
+        let open = cursor + found;
+        // `<h` or `</h`, then a digit 1-6.
+        let after = if bytes.get(open + 1) == Some(&b'/') {
+            open + 2
+        } else {
+            open + 1
+        };
+        let is_heading = bytes.get(after) == Some(&b'h')
+            && bytes
+                .get(after + 1)
+                .is_some_and(|d| d.is_ascii_digit() && (b'1'..=b'6').contains(d));
+
+        if !is_heading {
+            out.push_str(&html[cursor..open + 1]);
+            cursor = open + 1;
+            continue;
+        }
+
+        let level = (bytes[after + 1] - b'0')
+            .saturating_add(shift)
+            .min(MAX_HEADING_LEVEL);
+        out.push_str(&html[cursor..after + 1]);
+        out.push((b'0' + level) as char);
+        cursor = after + 2;
+    }
+
+    out.push_str(&html[cursor..]);
+    out
+}
+
 pub struct Writer {}
 
 impl Writer {
@@ -76,7 +139,7 @@ impl Writer {
     pub fn rss_content_html(section: &Section, state: &CompileState) -> eyre::Result<String> {
         let mut counter = Counter::init();
         let (article_inner, _catalog_item) =
-            Writer::section_to_html(section, &mut counter, true, false, state)?;
+            Writer::section_to_html(section, &mut counter, true, false, state, PAGE_LEVEL)?;
         Ok(article_inner)
     }
 
@@ -84,7 +147,7 @@ impl Writer {
         let mut counter = Counter::init();
 
         let (article_inner, items) =
-            Writer::section_to_html(section, &mut counter, true, false, state)?;
+            Writer::section_to_html(section, &mut counter, true, false, state, PAGE_LEVEL)?;
         let catalog_html = if items.is_empty().not() {
             html_flake::html_catalog_block(&items)
         } else {
@@ -164,7 +227,11 @@ impl Writer {
                     );
                     continue;
                 };
-                content.push_str(&Writer::footer_section_to_html(footer_mode, section)?);
+                content.push_str(&Writer::footer_section_to_html(
+                    footer_mode,
+                    section,
+                    FOOTER_ENTRY_LEVEL,
+                )?);
             }
 
             if content.is_empty() {
@@ -189,7 +256,11 @@ impl Writer {
                     );
                     continue;
                 };
-                content.push_str(&Writer::footer_section_to_html(footer_mode, section)?);
+                content.push_str(&Writer::footer_section_to_html(
+                    footer_mode,
+                    section,
+                    FOOTER_ENTRY_LEVEL,
+                )?);
             }
 
             if content.is_empty() {
@@ -253,10 +324,13 @@ impl Writer {
     fn footer_content_to_html(
         page_option: Option<FooterMode>,
         content: &SectionContent,
+        level: u8,
     ) -> eyre::Result<String> {
         match content {
-            SectionContent::Plain(s) => Ok(s.to_string()),
-            SectionContent::Embed(section) => Writer::footer_section_to_html(page_option, section),
+            SectionContent::Plain(s) => Ok(shift_heading_levels(s, level)),
+            SectionContent::Embed(section) => {
+                Writer::footer_section_to_html(page_option, section, level + 1)
+            }
             SectionContent::Query(_) => Ok(String::new()),
         }
     }
@@ -264,12 +338,13 @@ impl Writer {
     fn footer_section_to_html(
         page_option: Option<FooterMode>,
         section: &Section,
+        level: u8,
     ) -> eyre::Result<String> {
         let footer_mode = page_option.unwrap_or(environment::footer_mode());
 
         match footer_mode {
             FooterMode::Link => {
-                let summary = section.metadata.to_header(None, None, false)?;
+                let summary = section.metadata.to_header(None, None, false, level)?;
                 let data_taxon = section.metadata.data_taxon().map_or("", |s| s);
                 Ok(format!(
                     r#"<section class="block" data-taxon="{data_taxon}" style="margin-bottom: 0.4em;">{summary}</section>"#
@@ -278,7 +353,11 @@ impl Writer {
             FooterMode::Embed => {
                 let mut contents = String::new();
                 for content in &section.children {
-                    contents.push_str(&Writer::footer_content_to_html(page_option, content)?);
+                    contents.push_str(&Writer::footer_content_to_html(
+                        page_option,
+                        content,
+                        level,
+                    )?);
                 }
                 // A footer entry is a pointer to another note. Its author,
                 // status and the rest belong on that note's own page, not
@@ -290,6 +369,7 @@ impl Writer {
                     false,
                     None,
                     None,
+                    level,
                 )
             }
         }
@@ -301,6 +381,7 @@ impl Writer {
         toplevel: bool,
         hide_metadata: bool,
         state: &CompileState,
+        depth: u8,
     ) -> eyre::Result<(String, String)> {
         let adhoc_taxon = Writer::taxon(section, counter);
         let (mut contents, mut items) = (String::new(), String::new());
@@ -314,7 +395,7 @@ impl Writer {
 
             for child in &section.children {
                 let (content_html, item_html) =
-                    Writer::content_to_html(child, &mut subcounter, !is_collection, state)?;
+                    Writer::content_to_html(child, &mut subcounter, !is_collection, state, depth)?;
                 contents.push_str(&content_html);
                 items.push_str(&item_html);
             }
@@ -361,6 +442,7 @@ impl Writer {
             section.option.details_open,
             None,
             Some(adhoc_taxon.as_str()),
+            depth,
         )?;
 
         Ok((article_inner, catalog_item))
@@ -371,11 +453,16 @@ impl Writer {
         counter: &mut Counter,
         hide_metadata: bool,
         state: &CompileState,
+        depth: u8,
     ) -> eyre::Result<(String, String)> {
         match content {
-            SectionContent::Plain(s) => Ok((s.to_string(), String::new())),
+            // Typst numbers its own headings from a note's own top level, so a
+            // note embedded three deep would emit the same levels as the page
+            // around it. Shifting by the containing depth slots them in below
+            // their section instead of alongside it.
+            SectionContent::Plain(s) => Ok((shift_heading_levels(s, depth), String::new())),
             SectionContent::Embed(section) => {
-                Writer::section_to_html(section, counter, false, hide_metadata, state)
+                Writer::section_to_html(section, counter, false, hide_metadata, state, depth + 1)
             }
             // Listings are substituted for plain HTML before writing begins;
             // reaching one here means the resolve pass was skipped.
@@ -474,6 +561,50 @@ mod tests {
             .0
             .insert("date".to_string(), HTMLContent::Plain(date.to_string()));
         section
+    }
+
+    #[test]
+    fn test_shift_heading_levels_is_a_noop_at_the_top_level() {
+        // Typst maps `= ` to `<h2>` on the assumption that the note's title is
+        // `h1` — true for a note rendered as its own page.
+        let html = "<h2>A</h2><p>x</p><h3>B</h3>";
+        assert_eq!(shift_heading_levels(html, 1), html);
+    }
+
+    #[test]
+    fn test_shift_heading_levels_follows_the_section_down() {
+        let html = "<h2>A</h2><h3>B</h3>";
+        assert_eq!(shift_heading_levels(html, 2), "<h3>A</h3><h4>B</h4>");
+        assert_eq!(shift_heading_levels(html, 3), "<h4>A</h4><h5>B</h5>");
+    }
+
+    #[test]
+    fn test_shift_heading_levels_clamps_at_h6() {
+        // Deep nesting flattens at the bottom rather than inventing `h7`.
+        assert_eq!(shift_heading_levels("<h4>A</h4>", 9), "<h6>A</h6>");
+    }
+
+    #[test]
+    fn test_shift_heading_levels_rewrites_closing_tags_too() {
+        assert_eq!(
+            shift_heading_levels("<h2 id=\"x\">A</h2>", 2),
+            "<h3 id=\"x\">A</h3>"
+        );
+    }
+
+    #[test]
+    fn test_shift_heading_levels_leaves_typst_head_alone() {
+        // `typst_cli::html_to_body_content` keeps Typst's own `<head>` inside the
+        // content; matching `<h` plus a digit is what keeps it out of reach.
+        let html = "<head><style>a{}</style></head><body><p>x</p></body>";
+        assert_eq!(shift_heading_levels(html, 3), html);
+    }
+
+    #[test]
+    fn test_shift_heading_levels_leaves_links_alone() {
+        // `html_link` output lands in the same Plain chunks and has no headings.
+        let html = r#"<span class="link local"><a href="/x" title="t">T</a></span>"#;
+        assert_eq!(shift_heading_levels(html, 4), html);
     }
 
     #[test]

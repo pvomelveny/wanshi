@@ -275,6 +275,7 @@ impl EntryMetaData {
         adhoc_title: Option<&str>,
         adhoc_taxon: Option<&str>,
         show_extra: bool,
+        level: u8,
     ) -> eyre::Result<String> {
         let entry_taxon = self.taxon().map_or("", |s| s);
         let taxon = adhoc_taxon.unwrap_or(entry_taxon);
@@ -302,6 +303,7 @@ impl EntryMetaData {
             source_pos: self.get_str(KEY_SOURCE_POS).map(String::as_str),
             etc: &etc,
             show_extra,
+            level,
         }))
     }
 
