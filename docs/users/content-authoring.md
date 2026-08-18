@@ -112,10 +112,15 @@ is a build error naming the section and key.
 Any key not listed above is a custom key. Custom keys are:
 
 - preserved in `wanshi.json`,
-- rendered in the page header's metadata row (value only — the key name is not
-  printed),
-- usable as a `footer-sort-by` sort key,
-- allowed to contain rich content, including `local()` links.
+- usable as a `footer-sort-by` sort key and as a `query()` filter,
+- allowed to contain rich content, including `local()` links,
+- **not displayed unless you ask for them.**
+
+A key appears beneath the title only if it is listed in `[build].header-keys`,
+which defaults to `["date", "author"]`. Everything else is data: it sorts,
+filters, and ships in `wanshi.json`, but nothing is printed. Custom keys render
+as bare values with no key name, so an unlisted one would read as a stray word
+under the title rather than as information.
 
 ```typst
 #metadata((

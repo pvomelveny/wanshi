@@ -16,15 +16,28 @@ use crate::{
 /// section is not the subject of the page — a footer entry would otherwise
 /// print another note's author and status as if they were this page's.
 pub fn html_header_metadata(etc: &[(String, String)], show_extra: bool) -> String {
-    let date = etc.iter().find(|(key, _)| key == KEY_DATE).map(|(_, v)| v);
+    // `[build].header-keys` decides what a note prints under its title, in the
+    // order listed. Anything absent from it is still in `wanshi.json` and still
+    // sorts and filters; it just does not appear, because a bare value with no
+    // key name beside it means little to anyone but its author.
+    let allowed = environment::header_keys();
+    let shows = |key: &str| allowed.iter().any(|k| k == key);
+
+    let date = etc
+        .iter()
+        .find(|(key, _)| key == KEY_DATE)
+        .map(|(_, value)| value)
+        .filter(|_| shows(KEY_DATE));
 
     let mut items = String::new();
     if show_extra {
-        for (key, value) in etc {
+        for key in &allowed {
             if key == KEY_DATE {
                 continue;
             }
-            items.push_str(&html!(li class="meta-item" { (value) }));
+            if let Some((_, value)) = etc.iter().find(|(k, _)| k == key) {
+                items.push_str(&html!(li class="meta-item" { (value) }));
+            }
         }
     }
     let rest = html!(div class="metadata" { ul { (items) } });
@@ -242,15 +255,24 @@ mod tests {
     }
 
     #[test]
-    fn test_header_metadata_keeps_the_date_but_can_drop_custom_keys() {
+    fn test_header_metadata_prints_only_the_configured_keys() {
+        crate::environment::mock_environment().unwrap();
+
         let etc = vec![
             ("date".to_string(), "2026-08-17".to_string()),
             ("author".to_string(), "Someone".to_string()),
+            ("status".to_string(), "stable".to_string()),
         ];
 
+        // Defaults are date and author. `status` is a perfectly good key that
+        // sorts and filters; it simply is not printed unless asked for.
         let shown = super::html_header_metadata(&etc, true);
         assert!(shown.contains("2026-08-17"));
         assert!(shown.contains("Someone"));
+        assert!(
+            !shown.contains("stable"),
+            "an unlisted key should stay out of the header"
+        );
 
         // A footer entry renders another note's header; its custom keys would
         // read as stray words belonging to the page doing the linking.

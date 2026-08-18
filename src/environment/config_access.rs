@@ -143,6 +143,15 @@ pub fn footer_sort_by() -> String {
     with_config(|cfg| cfg.build.footer_sort_by.clone())
 }
 
+/// Metadata keys allowed to appear beneath a title, in the order given.
+///
+/// Everything else stays in `wanshi.json` and remains usable as a sort key or
+/// query filter — it is simply not printed. Display is opt-in because custom
+/// keys render as bare values with no key name.
+pub fn header_keys() -> Vec<String> {
+    with_config(|cfg| cfg.build.header_keys.clone())
+}
+
 pub fn publish_rss() -> bool {
     with_config(|cfg| cfg.publish.rss)
 }

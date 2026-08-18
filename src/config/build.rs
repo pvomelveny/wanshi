@@ -21,6 +21,7 @@ pub struct Build {
     pub edit: Option<String>,
     pub search: bool,
     pub search_content: bool,
+    pub header_keys: Vec<String>,
 }
 
 impl Default for Build {
@@ -40,6 +41,12 @@ impl Default for Build {
             // Body text is indexed as a token -> sections map, never as stored
             // prose, so enabling it by default does not duplicate the notes.
             search_content: true,
+            // Metadata is data first and chrome second. Custom keys are
+            // rendered as bare values with no key name, which is only legible
+            // to whoever wrote them, so a note shows nothing under its title
+            // unless the site asks for it. Date and author are the two that
+            // read as themselves.
+            header_keys: vec!["date".to_string(), "author".to_string()],
         }
     }
 }

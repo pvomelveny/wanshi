@@ -204,10 +204,12 @@ The fields you will reach for constantly:
   key. A taxon starting with `reference` also changes linking behaviour — see
   [Links and References](links-and-references.md#reference-taxons).
 - **`date`** — conventional, but wanshi gives it a dedicated column in page
-  headers and in table-of-contents entries, so it is worth setting consistently.
+  headers and in listings, so it is worth setting consistently.
 
-Any other key you invent is preserved and displayed. `"author": "Patrick"` above
-shows up in the header metadata row alongside the date.
+Any other key you invent is preserved, sortable, and queryable, but shown only
+if you list it in `[build].header-keys`. That defaults to `["date", "author"]`,
+so `"author": "Patrick"` above appears beside the date and a `"status"` would
+not — add it to the list if you want it on the page.
 
 For dates, `YYYY-MM-DD` sorts most reliably. `October 12, 2025` and `10/12/2025`
 also parse. A bare year like `1968` does not parse as a date and will fall back

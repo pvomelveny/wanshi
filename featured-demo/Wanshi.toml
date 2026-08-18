@@ -35,6 +35,11 @@ asref = false
 output = "./publish"
 search = true
 search-content = true
+# Which metadata keys print under a title, in this order. Everything else stays
+# in `wanshi.json` and still sorts and filters, it just is not shown. The
+# defaults are `date` and `author`; `status` and `see-also` are added here so
+# `guide/metadata` can demonstrate custom keys, including a rich one.
+header-keys = ["date", "author", "status", "see-also"]
 
 [serve]
 edit = "vscode://file/"
