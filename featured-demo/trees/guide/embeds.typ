@@ -60,8 +60,9 @@ An explicit `parent` beats an embedding one and never loses to it.
 
 An embedded note may embed one of its own, and the whole chain renders in
 place. The block below is #local("/guide/chain-middle"), which embeds
-#local("/guide/chain-inner") — so this page shows three levels at once,
-indented, with the table of contents matching.
+#local("/guide/chain-inner") — so this page shows the whole chain at once,
+indented, with the table of contents matching. The heading it sits under counts
+as a level of its own, which puts the innermost note three deep.
 
 #embed("/guide/chain-middle", "A note that embeds another")
 

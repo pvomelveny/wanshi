@@ -97,10 +97,11 @@ indents to match, so the structure is legible from the sidebar alone.
     Associative, and the empty string leaves any string unchanged — so this is a
     monoid, and it is the free one on that alphabet.
 
-    #remark(title: "Three levels deep, anonymous")[
+    #remark(title: "Four levels deep, anonymous")[
       Nesting has no depth limit. This block sits inside the example, which sits
-      inside the definition, which sits inside the page. Being anonymous, it
-      stops here: nothing can link to it.
+      inside the definition, which sits inside the `= Nesting` heading above —
+      headings are sections too, so they count toward the depth. Being
+      anonymous, it stops here: nothing can link to it.
     ]
   ]
 
@@ -108,7 +109,8 @@ indents to match, so the structure is legible from the sidebar alone.
     A definition that only earns its place inside this argument is easier to
     read here than one directory over. Give it a slug — as this one has — and it
     becomes addressable without moving: #local("/guide/monoid-strings") is a
-    real link to a subtree nested two levels down.
+    real link to a subtree three levels down, inside this heading and inside
+    the definition.
   ]
 ]
 
