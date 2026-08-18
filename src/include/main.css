@@ -33,11 +33,7 @@ html {
   --katex-font-size: 1em;
   --katex-frac-line-font-size: 1.25em;
   --details-h1-font-size: 1.2rem;
-  /* 13pt */
-  --section-details-h1-font-size: 1.083rem;
   --article-details-h1-font-size: 1.5rem;
-  /* 0.9em */
-  --article-details-h1-taxon-font-size: 1.35rem;
   /* 24px; */
   --logo-font-size: 1.5rem;
   /* 14pt; */
@@ -315,7 +311,12 @@ details>summary::-webkit-details-marker {
 /* Keyed on the class, not the tag: a section title's level now varies with its
    nesting depth, and a tag selector would also catch the Typst headings that
    share that level. */
-details .section-title,
+/* The title shares its line with the taxon, slug and edit links. Size comes
+   from the level scale above, not from here. */
+details .section-title {
+  display: inline;
+}
+
 .toc-title {
   font-size: var(--details-h1-font-size);
   display: inline;
@@ -351,24 +352,30 @@ span.taxon {
   font-style: italic;
 }
 
-article>section>details>summary>header>.section-title {
+/* One scale for every heading in an article, whether Typst wrote it or it is a
+   section's own title. Both are `hN` chosen by nesting depth, so `= About` and
+   an embedded note sitting at the same level should read at the same size. The
+   scale used to be Typst-only, and section titles were sized separately by how
+   deeply they were nested — which left an embedded note's title smaller than
+   the heading beside it. */
+article h1 {
   font-size: var(--article-details-h1-font-size);
 }
 
-article>section>details>h2 {
+article h2 {
   font-size: 1.25rem;
 }
 
-article>section>details>h3 {
+article h3 {
   font-size: 1.125rem;
 }
 
-article>section>details>h4 {
+article h4 {
   font-size: 1rem;
 }
 
-article>section>details>h5,
-article>section>details>h6 {
+article h5,
+article h6 {
   font-size: 0.875rem;
 }
 
@@ -377,9 +384,11 @@ article>section>details>summary>header {
   margin-bottom: 0.5em;
 }
 
+/* No font-size here: `span.taxon` sizes itself in `em`, so the pill tracks
+   whatever heading it sits in. It used to be pinned to an absolute size on the
+   page title alone, which left it nearly as large as the title it labels. */
 article>section>details>summary>header>.section-title>.taxon {
   display: inline-block;
-  font-size: var(--article-details-h1-taxon-font-size);
   color: var(--article-taxon-color);
   padding-bottom: 5pt;
 }
@@ -474,11 +483,6 @@ ol {
 section section[data-taxon="Reference" i]>details>summary>header>.section-title>.taxon,
 section section[data-taxon="Person" i]>details>summary>header>.section-title>.taxon {
   display: none;
-}
-
-section .block[data-taxon]>header>.section-title,
-section .block[data-taxon] details>summary>header>.section-title {
-  font-size: var(--section-details-h1-font-size);
 }
 
 footer>section {
@@ -578,6 +582,15 @@ a.hash {
      clearance to stay off the descenders of a serif body face. */
   text-underline-offset: 0.15em;
   overflow-wrap: break-word;
+}
+
+/* Sized down from whatever they sit beside. Inside a heading these inherited
+   the title's size exactly, so `[slug]` and `[edit]` read as loud as the title
+   they annotate. */
+.section-title>.slug,
+.section-title>.edit,
+.section-title>.hash {
+  font-size: 0.8em;
 }
 
 .slug,
