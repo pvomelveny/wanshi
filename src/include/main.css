@@ -485,15 +485,6 @@ ol {
   font-size: var(--logo-font-size);
 }
 
-/* `data-taxon` carries the taxon exactly as authored, so match case-insensitively
-   with `i` — a note may declare "Reference" or "reference" and mean the same
-   thing. This used to rely on the attribute always being capitalized, which was
-   only true while the display form was stored in the metadata. */
-section section[data-taxon="Reference" i]>details>summary>header>.section-title>.taxon,
-section section[data-taxon="Person" i]>details>summary>header>.section-title>.taxon {
-  display: none;
-}
-
 footer>section {
   margin-top: 2rem;
   padding-top: 1rem;
