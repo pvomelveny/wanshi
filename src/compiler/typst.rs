@@ -24,6 +24,18 @@ use crate::{
 
 use std::{borrow::Cow, collections::HashSet, str};
 
+/// Parse an attribute that may also decline to decide.
+///
+/// `None` and `auto` both mean "unset", which is how a block says it wants
+/// whatever the page chose. Everything else reads as [`parse_bool`] does.
+fn parse_tristate(m: Option<&Cow<'_, str>>) -> Option<bool> {
+    match m.map(|s| s.as_ref()) {
+        None | Some("auto") => None,
+        Some("false") | Some("0") | Some("none") => Some(false),
+        _ => Some(true),
+    }
+}
+
 fn parse_bool(m: Option<&Cow<'_, str>>, def: bool) -> bool {
     match m.map(|s| s.as_ref()) {
         None | Some("auto") => def,
@@ -102,7 +114,7 @@ fn parse_typst_html(
 
                 let url = attr("url")?.to_string();
                 let title = value();
-                let numbering = parse_bool(span.attrs.get("numbering"), def.numbering);
+                let numbering = parse_tristate(span.attrs.get("numbering"));
                 let details_open = parse_bool(span.attrs.get("open"), def.details_open);
                 let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
                 builder.push(LazyContent::Embed(EmbedContent {
@@ -206,7 +218,7 @@ fn parse_typst_html(
                 };
 
                 let def = SectionOption::default();
-                let numbering = parse_bool(span.attrs.get("numbering"), def.numbering);
+                let numbering = parse_tristate(span.attrs.get("numbering"));
                 let details_open = parse_bool(span.attrs.get("open"), def.details_open);
                 let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
                 let option = SectionOption::new(numbering, details_open, catalog);
@@ -389,6 +401,22 @@ pub fn parse_typst_sections<P: AsRef<Utf8Path>>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_parse_tristate_defers_when_unset_or_auto() {
+        assert_eq!(super::parse_tristate(None), None);
+        assert_eq!(super::parse_tristate(Some(&Cow::from("auto"))), None);
+    }
+
+    #[test]
+    fn test_parse_tristate_reads_explicit_answers() {
+        for off in ["false", "0", "none"] {
+            assert_eq!(super::parse_tristate(Some(&Cow::from(off))), Some(false));
+        }
+        for on in ["true", "1", "yes"] {
+            assert_eq!(super::parse_tristate(Some(&Cow::from(on))), Some(true));
+        }
+    }
+
     use super::*;
     use crate::{
         compiler::{
@@ -429,7 +457,7 @@ mod tests {
             .expect("expected subtree embed");
         assert_eq!(embed.url, "/book/child");
         assert_eq!(embed.title.as_deref(), Some("Child"));
-        assert!(embed.option.numbering);
+        assert_eq!(embed.option.numbering, Some(true));
 
         let child = find_section(&sections, Slug::new("book/child"));
         assert_eq!(

@@ -54,6 +54,10 @@ pub fn html_header_metadata(etc: &[(String, String)], show_extra: bool) -> Strin
 pub struct HtmlHeaderArgs<'a> {
     pub title: &'a str,
     pub taxon: &'a str,
+    /// Section number, or empty. Only ever set for a section with no taxon: one
+    /// that has a taxon carries its number inside the pill instead, so the two
+    /// are never both present.
+    pub number: &'a str,
     pub slug: &'a Slug,
     pub ext: &'a str,
     pub show_slug: bool,
@@ -87,6 +91,7 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
     let HtmlHeaderArgs {
         title,
         taxon,
+        number,
         slug,
         ext,
         show_slug,
@@ -154,7 +159,8 @@ pub fn html_header(args: HtmlHeaderArgs<'_>) -> String {
     // so a tag selector could no longer identify a section title — and worse,
     // would start catching the Typst headings that share its level.
     let tag = heading_tag(level);
-    let title_html = html!(span class="taxon" { (taxon) })
+    let title_html = html!(span class="section-number" { (number) })
+        + &html!(span class="taxon" { (taxon) })
         + &html!(span class="title" { (title) })
         + " "
         + &slug_link
@@ -275,6 +281,7 @@ mod tests {
         let rendered = super::html_header(super::HtmlHeaderArgs {
             title: "Title",
             taxon: &display_taxon("exegesis"),
+            number: "",
             slug: &slug,
             ext: "typst",
             show_slug: true,
@@ -304,6 +311,7 @@ mod tests {
         let args = |level| super::HtmlHeaderArgs {
             title: "Title",
             taxon: "Taxon. ",
+            number: "",
             slug: &slug,
             ext: "typst",
             show_slug: true,
@@ -331,6 +339,7 @@ mod tests {
         let html = super::html_header(super::HtmlHeaderArgs {
             title: "Title",
             taxon: "Taxon. ",
+            number: "",
             slug: &Slug::new("book/child"),
             ext: "typst",
             show_slug: false,

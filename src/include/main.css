@@ -339,6 +339,32 @@ span.taxon {
   margin-right: 0.5em;
 }
 
+/* A section number, for a section that has no taxon to hang one on. Sized and
+   coloured like the taxon pill it stands in for, but without the border: a
+   number is not a category, and a bordered "1.2" reads as a label rather than
+   as a position.
+
+   `:empty` is how it disappears when a page is not numbered, which is nearly
+   always. Both selectors are needed for the same reason the taxon rule needs
+   two — see the note there. */
+.section-number,
+.section-title>.section-number {
+  display: inline;
+  color: var(--span-taxon-color);
+  font-family: var(--heading-font-family);
+  /* Full size, unlike the taxon pill it stands in for. A number in a pill is
+     part of a small label; a number in front of a heading is part of the
+     heading, and set smaller it reads as a footnote marker instead. */
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.4em;
+  white-space: nowrap;
+}
+
+.section-number:empty,
+.section-title>.section-number:empty {
+  display: none;
+}
+
 /* Sections without a taxon still emit the element, so without this an index
    page shows an empty bordered pill wherever it is linked or listed.
    The second selector is not redundant. The header rule further down sets

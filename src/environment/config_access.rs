@@ -181,6 +181,10 @@ pub fn asref() -> bool {
     with_config(|cfg| cfg.build.asref)
 }
 
+pub fn numbering() -> bool {
+    with_config(|cfg| cfg.build.numbering)
+}
+
 pub fn deploy_edit_url() -> Option<String> {
     with_config(|cfg| cfg.build.edit.clone())
 }

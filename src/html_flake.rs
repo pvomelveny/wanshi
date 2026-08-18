@@ -8,7 +8,8 @@ mod header;
 
 pub use core::{
     catalog_item, html_article_inner, html_catalog_block, html_footer, html_footer_section,
-    html_header_nav, html_link, html_query_block, html_query_item, CatalogItemArgs,
+    html_header_nav, html_link, html_query_block, html_query_item, ArticleInnerArgs,
+    CatalogItemArgs,
 };
 pub use document::{html_doc, html_main_script, html_main_style};
 pub use header::{html_header, HtmlHeaderArgs};
