@@ -3,11 +3,8 @@
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
 use crate::{
-    compiler::{section::HTMLContent},
-    config::build::FooterMode,
-    environment, html_flake,
-    ordered_map::OrderedMap,
-    slug::Slug,
+    compiler::section::HTMLContent, config::build::FooterMode, environment, html_flake,
+    ordered_map::OrderedMap, slug::Slug,
 };
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
