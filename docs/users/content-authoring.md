@@ -80,17 +80,53 @@ available.
 
 ## Headings and the Document Outline
 
-Typst headings work normally inside a note — `=`, `==`, and so on. wanshi does not
-turn them into sections: they get no slug, no page, and no table-of-contents row.
-They are typography and document structure, not identity.
+A Typst heading opens a section. Everything after `= Background` belongs to it —
+prose, embeds, subtrees, listings — until a heading at the same or a shallower
+level ends it. So this:
 
-What wanshi does control is the **level** each heading is emitted at. A section's
-title is `h{depth}`, where depth is its nesting on the page being rendered: the
-page's own note is `h1`, a note embedded in it is `h2`, one embedded inside that
-is `h3`. Typst's own headings inside a section are pushed down by the same amount,
-so they stay below the section that contains them.
+```typst
+= Background
+Some prose.
+#embed("/note-a", "A note")
 
-The result is one `h1` per page and an outline that matches what a reader sees.
+= Method
+#embed("/note-b", "Another")
+```
+
+renders `note-a` inside Background and `note-b` inside Method, and the table of
+contents indents them to match. Headings get a row in the outline and a `[#]`
+anchor of their own, named after their text.
+
+A heading is still not an identity: it has no slug you can link to from another
+note, does not appear in listings, and never becomes anything's parent. `note-a`
+above still reports the page as its parent and still shows the page — not
+Background — under **Found in**. When you want a heading that *is* addressable,
+use `#subtree(slug: "...")`; see [Subtrees](#subtrees).
+
+### Getting back out
+
+Another heading is the usual way out, and covers most cases: a second `=` ends
+the first. When you want out without writing one — a closing embed that belongs
+to the note as a whole, say — use `#outdent()`:
+
+```typst
+= Background
+#embed("/note-a", "A note")     // inside Background
+
+#outdent()
+#embed("/note-c", "Afterword")  // back at the top level of the note
+```
+
+Each call steps out one level, so two calls escape two headings. Calling it with
+no heading open does nothing, which means moving a heading around can never turn
+a working note into a failing build.
+
+### Levels
+
+A section's title is `h{depth}`, where depth is its nesting on the page being
+rendered: the page's own note is `h1`, a heading or an embed inside it is `h2`,
+something inside that is `h3`. One `h1` per page, and an outline that matches
+what a reader sees.
 
 Two consequences worth knowing:
 
@@ -98,13 +134,14 @@ Two consequences worth knowing:
   `h1` on its own page and `h3` when embedded two levels deep. That is correct —
   an outline describes a page, not a note — but it means you cannot rely on a
   fixed level.
-- **Start a note's headings at `=`, not `==`.** Typst maps `=` to `h2`, directly
-  below a note's `h1` title. Starting at `==` skips a level, which strict
-  accessibility checkers flag.
+- **Skipping a level does not skip a number.** Writing `===` directly under a `=`
+  nests it one level, so it is emitted as `h3`, not `h4`. Levels are read as an
+  ordering, not as absolute depths, which is why the output never has the gaps
+  strict accessibility checkers flag.
 
 Nesting deeper than six levels clamps at `h6`, which is the deepest heading HTML
 defines. Typst's `======` is not emitted as a heading element at all — it becomes
-a `<div role="heading">` — so it is left alone.
+a `<div role="heading">` — so it opens no section and is left in the prose.
 
 ## Metadata Reference
 
@@ -208,7 +245,19 @@ Parameters:
 
 Anonymous subtrees (no `slug:`) get an internal identifier, are never linkable,
 and are stripped from `wanshi.json`, `wanshi.graph.json`, and the
-reference/backlink graph.
+reference/backlink graph. A heading opens a section of exactly this kind, which
+is why one can hold embeds without ever becoming their parent.
+
+Being stripped is about identity, not about the edges written inside. A `#local`
+in an anonymous subtree still registers its backlink, recorded against the
+nearest enclosing section that *is* published — so the note the reader sees as
+having made the link is the one credited with it.
+
+#### `outdent`
+
+`#outdent()` closes the innermost open heading section. It takes no arguments,
+draws nothing, and does nothing when no heading is open. See
+[Getting back out](#getting-back-out).
 
 #### Semantic Helpers
 

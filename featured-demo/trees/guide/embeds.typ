@@ -119,3 +119,38 @@ Embed when the material is genuinely its own note — something you would want t
 link to, cite, or find in a listing — but which also belongs in the middle of
 this argument. If it is only ever going to be read here, write it here, or make
 it a subtree: see #local("/guide/subtrees").
+
+= Headings hold embeds
+
+Every `=` on this page opened a section, and each embed above landed inside the
+one it was written under — look at the table of contents, which indents them to
+match. That is why *Knuth, collapsed* sits inside *Options* rather than beside
+it.
+
+A heading holding an embed does not adopt it. Follow #local("/refs/knuth-1984")
+and its breadcrumb still reads *References*, and its *Found in* still names this
+page rather than *Options*. Headings order a page; they are not identities.
+
+#subtree(title: "Getting back out", taxon: "observation")[
+  The usual way out of a heading is another heading — the next `=` ends the one
+  before it. `#outdent()` is for when you want out without writing one:
+
+  ```typst
+  = Headings hold embeds
+  #embed("/refs/typst", "Inside the heading")
+
+  #outdent()
+  #embed("/refs/typst", "Back at the top level")
+  ```
+
+  Each call steps out one level. With no heading open it does nothing, so moving
+  a heading around cannot turn a working note into a failing build.
+]
+
+#outdent()
+
+#subtree(title: "Written after #outdent()", taxon: "observation")[
+  This block belongs to the note rather than to *Headings hold embeds*, even
+  though it was written below it. In the table of contents it is the last row at
+  the outer level, not one indented under that heading.
+]
