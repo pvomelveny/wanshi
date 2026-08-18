@@ -3,7 +3,7 @@
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
 use crate::{
-    compiler::{section::HTMLContent, taxon::Taxon},
+    compiler::{section::HTMLContent},
     config::build::FooterMode,
     environment, html_flake,
     ordered_map::OrderedMap,
@@ -259,9 +259,13 @@ impl HTMLMetaData {
 
         if self.data_taxon().is_none() {
             if let Some(taxon) = self.taxon() {
+                // `taxon` is the authored string, so this is a straight copy.
+                // It used to be reconstructed by truncating the display form at
+                // its first ".", which silently destroyed any taxon containing
+                // one: "fig. 3 caption" arrived as "Fig".
                 self.0.insert(
                     KEY_DATA_TAXON.to_string(),
-                    HTMLContent::Plain(Taxon::to_data_taxon(&taxon.remove_all_tags()).to_string()),
+                    HTMLContent::Plain(taxon.remove_all_tags()),
                 );
             }
         }

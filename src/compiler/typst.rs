@@ -21,7 +21,6 @@ use crate::{
     typst_cli,
 };
 
-use super::taxon::display_taxon;
 use std::{borrow::Cow, collections::HashSet, str};
 
 fn parse_bool(m: Option<&Cow<'_, str>>, def: bool) -> bool {
@@ -87,16 +86,14 @@ fn parse_typst_html(
         match span.kind {
             HTMLTagKind::Meta => {
                 let key = attr("key")?.as_ref();
-                let mut val = if let Some(value) = span.attrs.get("value") {
+                // The taxon is stored exactly as authored. Capitalisation and the
+                // trailing ". " are display concerns and are applied when a taxon
+                // is rendered, not baked into the metadata — see `display_taxon`.
+                let val = if let Some(value) = span.attrs.get("value") {
                     HTMLContent::Plain(value.to_string())
                 } else {
                     parse_typst_html(ctx, span.body, current_slug, &mut OrderedMap::new(), false)?
                 };
-                if key == "taxon" {
-                    if let HTMLContent::Plain(v) = val {
-                        val = HTMLContent::Plain(display_taxon(&v));
-                    }
-                }
                 metadata.insert(key.to_string(), val);
             }
             HTMLTagKind::Embed => {
@@ -285,10 +282,8 @@ fn apply_subtree_defaults(
     }
     if !metadata.contains_key(KEY_TAXON) {
         if let Some(taxon) = taxon {
-            metadata.insert(
-                KEY_TAXON.to_string(),
-                HTMLContent::Plain(display_taxon(taxon)),
-            );
+            // Stored as authored; formatted at render time.
+            metadata.insert(KEY_TAXON.to_string(), HTMLContent::Plain(taxon.to_string()));
         }
     }
 }

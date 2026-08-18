@@ -320,7 +320,7 @@ fn hits_html(hits: &[QueryHit]) -> String {
             hit.slug,
             &hit.title,
             &hit.page_title,
-            &hit.taxon,
+            &crate::compiler::taxon::display_taxon(&hit.taxon),
             hit.date.as_deref(),
         ));
     }

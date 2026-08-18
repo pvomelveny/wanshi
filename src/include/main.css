@@ -460,8 +460,12 @@ ol {
   font-size: var(--logo-font-size);
 }
 
-section section[data-taxon="Reference"]>details>summary>header>h1>.taxon,
-section section[data-taxon="Person"]>details>summary>header>h1>.taxon {
+/* `data-taxon` carries the taxon exactly as authored, so match case-insensitively
+   with `i` — a note may declare "Reference" or "reference" and mean the same
+   thing. This used to rely on the attribute always being capitalized, which was
+   only true while the display form was stored in the metadata. */
+section section[data-taxon="Reference" i]>details>summary>header>h1>.taxon,
+section section[data-taxon="Person" i]>details>summary>header>h1>.taxon {
   display: none;
 }
 
