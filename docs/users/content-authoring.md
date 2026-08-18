@@ -117,7 +117,7 @@ Any key not listed above is a custom key. Custom keys are:
 - **not displayed unless you ask for them.**
 
 A key appears beneath the title only if it is listed in `[build].header-keys`,
-which defaults to `["date", "author"]`. Everything else is data: it sorts,
+which defaults to `["date", "author", "see-also"]`. Everything else is data: it sorts,
 filters, and ships in `wanshi.json`, but nothing is printed. Custom keys render
 as bare values with no key name, so an unlisted one would read as a stray word
 under the title rather than as information.

@@ -44,9 +44,13 @@ impl Default for Build {
             // Metadata is data first and chrome second. Custom keys are
             // rendered as bare values with no key name, which is only legible
             // to whoever wrote them, so a note shows nothing under its title
-            // unless the site asks for it. Date and author are the two that
-            // read as themselves.
-            header_keys: vec!["date".to_string(), "author".to_string()],
+            // unless the site asks for it. These three read as themselves: a
+            // date, a name, and a link the reader can follow.
+            header_keys: vec![
+                "date".to_string(),
+                "author".to_string(),
+                "see-also".to_string(),
+            ],
         }
     }
 }

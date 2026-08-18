@@ -207,7 +207,7 @@ The fields you will reach for constantly:
   headers and in listings, so it is worth setting consistently.
 
 Any other key you invent is preserved, sortable, and queryable, but shown only
-if you list it in `[build].header-keys`. That defaults to `["date", "author"]`,
+if you list it in `[build].header-keys`. That defaults to `["date", "author", "see-also"]`,
 so `"author": "Patrick"` above appears beside the date and a `"status"` would
 not — add it to the list if you want it on the page.
 

@@ -67,7 +67,7 @@ asref = false
 output = "./publish"
 search = true
 search-content = true
-header-keys = ["date", "author"]
+header-keys = ["date", "author", "see-also"]
 # edit = "https://example.com/edit/"   # optional; unset by default
 ```
 
@@ -83,7 +83,7 @@ header-keys = ["date", "author"]
 - `edit`: optional edit URL prefix for generated edit links in publish builds. Unset by default, in which case no edit link is rendered.
 - `search`: emit `wanshi.search.json` and show the sidebar search box. Set to `false` to remove both.
 - `search-content`: index note body text as well as titles. See [Search](#search) below.
-- `header-keys`: metadata keys printed beneath a title, in the order listed. Defaults to `["date", "author"]`. Display is **opt-in**: any other key is still preserved in `wanshi.json` and still usable for sorting and queries, it is simply not shown. Custom keys render as bare values with no key name, so an unexplained one reads as a stray word rather than as information. Taxon and title are always shown and are not affected. Footer and embedded entries show only the date regardless, since their other keys belong to the note being linked, not to the page doing the linking.
+- `header-keys`: metadata keys printed beneath a title, in the order listed. Defaults to `["date", "author", "see-also"]` — a date, a name, and a link the reader can follow. Display is **opt-in**: any other key is still preserved in `wanshi.json` and still usable for sorting and queries, it is simply not shown. Custom keys render as bare values with no key name, so an unexplained one reads as a stray word rather than as information. Taxon and title are always shown and are not affected. Footer and embedded entries show only the date regardless, since their other keys belong to the note being linked, not to the page doing the linking.
 
 ## `[serve]`
 

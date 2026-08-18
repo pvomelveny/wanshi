@@ -50,7 +50,13 @@ here is loud rather than silent.
 == Custom keys
 
 Anything not structural is a custom key. `status` above is one. Custom keys are
-preserved in `wanshi.json`, shown in the header, and usable as a sort key.
+preserved in `wanshi.json` and usable as a sort key or a query filter.
+
+Whether one *appears* under the title is a separate question, decided by
+`[build].header-keys`. It defaults to `date`, `author` and `see-also` — the
+three that read as themselves. A bare `stable` under a title means little
+without the word `status` beside it, so anything else is opt-in; this forest
+adds `status` to the list, which is the only reason you can see it above.
 
 They may also hold rich content, which structural keys may not — `see-also`
 above is a real link, resolved like any other:
