@@ -66,20 +66,21 @@ pub fn create_parent_dirs<P: AsRef<Utf8Path>>(path: P) {
     }
 }
 
-pub fn auto_create_dir_path<P: AsRef<Utf8Path>>(paths: Vec<P>) -> Utf8PathBuf {
-    let mut filepath: Utf8PathBuf = super::root_dir();
-    for path in paths {
-        filepath.push(path);
-    }
+/// Path to a generated file inside the output directory, creating its parent
+/// directories.
+///
+/// [`super::output_dir`] is already rooted at the project, so this only joins
+/// and creates. It used to route through a helper that started from
+/// `root_dir()` and pushed the *already-rooted* output directory onto it,
+/// applying the root twice: with root `notes` and output `../public/notes` the
+/// pages went to `notes/notes/../public/notes`, i.e. `notes/public/notes`,
+/// while the JSON artifacts — which use `output_dir()` directly — went to the
+/// right place. Running from inside the project hid it, because the root is
+/// then `.` and doubling it changes nothing.
+pub fn output_path<P: AsRef<Utf8Path>>(path: P) -> Utf8PathBuf {
+    let filepath = super::output_dir().join(path);
     create_parent_dirs(&filepath);
     filepath
-}
-
-pub fn output_path<P: AsRef<Utf8Path>>(path: P) -> Utf8PathBuf {
-    let dir = super::output_dir();
-    let dir = dir.as_path();
-    let path = path.as_ref();
-    auto_create_dir_path(vec![dir, path])
 }
 
 pub fn hash_dir() -> Utf8PathBuf {
@@ -201,6 +202,67 @@ mod tests {
             assert!(entry.as_str().contains("a.b.md.entry"));
             assert!(hash.parent().is_some_and(|parent| parent.exists()));
             assert!(entry.parent().is_some_and(|parent| parent.exists()));
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Regression: `output_path` applied the project root twice.
+    ///
+    /// `output_dir()` is already rooted, so pushing it onto `root_dir()` again
+    /// sent pages to `<root>/<root>/<output>` while the JSON artifacts, which
+    /// use `output_dir()` directly, went to `<root>/<output>`. A build split
+    /// its own output across two directories. Invisible from inside a project,
+    /// where the root is `.`.
+    #[test]
+    fn test_output_path_does_not_apply_the_root_twice() {
+        let root = crate::test_io::case_dir("env-paths-output-root-once");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let expected = super::super::output_dir().join("index.html");
+            assert_eq!(output_path("index.html"), expected);
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A page and an artifact written by the same build must land under the
+    /// same directory, whatever the root is.
+    #[test]
+    fn test_output_path_agrees_with_output_dir() {
+        let root = crate::test_io::case_dir("env-paths-output-agrees");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let dir = super::super::output_dir();
+            let page = output_path("notes/a.html");
+            assert!(
+                page.starts_with(&dir),
+                "page {page} should sit under the output dir {dir}"
+            );
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Regression: `typst-root` was the one configured path taken as written
+    /// rather than resolved against the project root, so it silently meant
+    /// "relative to the current working directory". `wanshi build --config
+    /// path/to/Wanshi.toml` from anywhere else could not find the sources.
+    #[test]
+    fn test_typst_root_dir_is_resolved_against_the_project_root() {
+        let root = crate::test_io::case_dir("env-paths-typst-root");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let typst_root = super::super::typst_root_dir();
+            assert!(
+                typst_root.starts_with(&root),
+                "typst root {typst_root} should sit under the project root {root}"
+            );
+            // And it agrees with where sections are actually read from.
+            assert_eq!(typst_root, super::super::trees_dir());
         });
 
         let _ = fs::remove_dir_all(root);

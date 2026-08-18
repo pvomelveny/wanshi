@@ -12,8 +12,17 @@ pub fn is_short_slug() -> bool {
     with_config(|cfg| cfg.build.short_slug)
 }
 
+/// Root passed to Typst compilation, resolved against the project root.
+///
+/// Every other configured path is interpreted relative to the directory holding
+/// `Wanshi.toml` — see [`trees_dir`], [`output_dir`], [`assets_dir`]. This one
+/// used to be taken as written, so it silently meant "relative to the current
+/// working directory" instead. Running from inside the project hid that, since
+/// the two coincide there; `wanshi build --config path/to/Wanshi.toml` from
+/// anywhere else looked for the sources under the wrong directory and failed
+/// with a "typst source not found" error naming a path that did not exist.
 pub fn typst_root_dir() -> Utf8PathBuf {
-    with_config(|cfg| cfg.build.typst_root.clone().into())
+    super::root_dir().join(with_config(|cfg| cfg.build.typst_root.clone()))
 }
 
 pub fn trees_dir_without_root() -> String {
