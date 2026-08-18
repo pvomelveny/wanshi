@@ -271,7 +271,46 @@ impl Writer {
         } else {
             String::default()
         };
-        Ok(html_flake::html_footer(&references_html, &backlinks_html))
+        // "Found in": the notes that embed this one.
+        //
+        // Always rendered as links, whatever `footer-mode` says. An embedder
+        // contains the note whose page this is, so rendering one in embed mode
+        // would print the page inside its own footer. Forcing Link mode means
+        // there is nothing to recurse into rather than a recursion to guard.
+        let embedded_by_text = environment::get_footer_embedded_by_text();
+        let embedded_by_html = if let Some(s) = callback {
+            let mut hosts: Vec<Slug> = s.embedded_by.iter().copied().collect();
+            Writer::sort_footer_slugs(&mut hosts, state, footer_sort_by);
+            let mut content = String::new();
+            for slug in hosts {
+                let Some(section) = state.compiled().get(&slug) else {
+                    color_print::ceprintln!(
+                        "<y>Warning: missing embedding section `{}`; skipping footer entry.</>",
+                        slug
+                    );
+                    continue;
+                };
+                content.push_str(&Writer::footer_section_to_html(
+                    Some(FooterMode::Link),
+                    section,
+                    FOOTER_ENTRY_LEVEL,
+                )?);
+            }
+
+            if content.is_empty() {
+                String::default()
+            } else {
+                html_footer_section("embedded-by", &embedded_by_text, &content)
+            }
+        } else {
+            String::default()
+        };
+
+        Ok(html_flake::html_footer(
+            &references_html,
+            &backlinks_html,
+            &embedded_by_html,
+        ))
     }
 
     fn sort_footer_slugs(slugs: &mut [Slug], state: &CompileState, footer_sort_by: &str) {

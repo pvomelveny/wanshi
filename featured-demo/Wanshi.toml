@@ -16,6 +16,7 @@ edit = "[edit]"
 toc = "Table of Contents"
 references = "References"
 backlinks = "Backlinks"
+embedded-by = "Found in"
 search = "Search  /"
 
 [build]

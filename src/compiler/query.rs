@@ -222,10 +222,12 @@ fn is_orphan(state: &CompileState, slug: Slug) -> bool {
         return false;
     }
     match state.callback().0.get(&slug) {
-        Some(callback) => {
-            let embedded = callback.parent.is_some() && !callback.is_parent_specified;
-            callback.backlinks.is_empty() && !embedded
-        }
+        // Reachability is now read from the two edges that record it, rather
+        // than reconstructed. It used to infer "something embedded me" from
+        // having a parent it did not declare — which silently called a note an
+        // orphan the moment it declared its own parent, however many pages
+        // embedded it.
+        Some(callback) => callback.backlinks.is_empty() && callback.embedded_by.is_empty(),
         None => true,
     }
 }
@@ -472,6 +474,44 @@ mod tests {
         assert_eq!(
             slugs_of(&state, &query),
             vec!["notes/bob", "notes/alice", "stray"]
+        );
+    }
+
+    #[test]
+    fn test_an_embedded_section_that_declares_a_parent_is_not_an_orphan() {
+        // The regression this edge exists to fix. Reachability used to be
+        // inferred from having a parent the section did not declare, so
+        // declaring one made an embedded note look unreachable — and wanshi's
+        // own docs recommend declaring one for notes embedded in several
+        // places.
+        let mut shallows = forest();
+        shallows.insert(
+            Slug::new("index"),
+            UnresolvedSection {
+                metadata: note("index", "Root", "collection", "2026-01-01").metadata,
+                content: HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/stray".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            },
+        );
+
+        // `stray` is embedded by `index` and names a parent of its own, and
+        // nothing links to it.
+        let mut stray = note("stray", "Stray", "remark", "2026-02-01");
+        stray.metadata.0.insert(
+            "parent".to_string(),
+            HTMLContent::Plain("notes/alice".to_string()),
+        );
+        shallows.insert(Slug::new("stray"), stray);
+
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+        let found = slugs_of(&state, &spec("index", QueryScope::Orphans));
+
+        assert!(
+            !found.iter().any(|s| s == "stray"),
+            "embedded, so reachable, even though it declares its own parent"
         );
     }
 

@@ -11,6 +11,7 @@ pub struct Text {
     pub toc: String,
     pub references: String,
     pub backlinks: String,
+    pub embedded_by: String,
     pub search: String,
 }
 
@@ -21,6 +22,7 @@ impl Default for Text {
             toc: "Table of Contents".to_string(),
             references: "References".to_string(),
             backlinks: "Backlinks".to_string(),
+            embedded_by: "Found in".to_string(),
             search: "Search  /".to_string(),
         }
     }

@@ -144,6 +144,10 @@ pub fn get_footer_backlinks_text() -> String {
     with_config(|cfg| cfg.text.backlinks.clone())
 }
 
+pub fn get_footer_embedded_by_text() -> String {
+    with_config(|cfg| cfg.text.embedded_by.clone())
+}
+
 pub fn footer_mode() -> FooterMode {
     with_config(|cfg| cfg.build.footer_mode)
 }

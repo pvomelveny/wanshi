@@ -173,8 +173,10 @@ pub fn html_query_block(title: Option<&str>, items_html: &str) -> String {
     })
 }
 
-pub fn html_footer(references_html: &str, backlinks_html: &str) -> String {
-    html!(footer { (references_html) (backlinks_html) })
+/// The three reverse views of a note, in order: what it cites, what cites it,
+/// what contains it. Each is omitted when empty.
+pub fn html_footer(references_html: &str, backlinks_html: &str, embedded_by_html: &str) -> String {
+    html!(footer { (references_html) (backlinks_html) (embedded_by_html) })
 }
 
 pub fn html_link(href: &str, title: &str, text: &str, class_name: &str) -> String {

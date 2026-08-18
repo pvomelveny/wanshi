@@ -16,6 +16,19 @@ pub struct CallbackValue {
 
     /// Used to record which sections reference the current section.
     pub backlinks: HashSet<Slug>,
+
+    /// Sections that embed this one, rendering its content inside their own.
+    ///
+    /// Kept apart from `backlinks` because citing a note and containing it are
+    /// different relationships, and a reader usually wants them answered
+    /// separately. Kept apart from `parent` because `parent` holds one slug and
+    /// an explicitly declared one displaces the embedder entirely — so a note
+    /// that is embedded *and* names its own parent used to leave no record of
+    /// being embedded at all.
+    ///
+    /// Direct embedders only, never transitive: if `h` embeds `m` and `m`
+    /// embeds `x`, then `x` records `m`.
+    pub embedded_by: HashSet<Slug>,
 }
 
 #[derive(Debug)]
@@ -37,6 +50,7 @@ impl Callback {
             }
             Some(existed) => {
                 existed.backlinks.extend(value.backlinks);
+                existed.embedded_by.extend(value.embedded_by);
 
                 // An explicitly declared parent always wins, and never loses to
                 // a later inferred one.
@@ -88,6 +102,7 @@ impl Callback {
                 parent: Some(parent),
                 is_parent_specified: false,
                 backlinks: HashSet::new(),
+                embedded_by: HashSet::new(),
             },
         );
     }
@@ -100,6 +115,7 @@ impl Callback {
                 parent: Some(parent),
                 is_parent_specified: true,
                 backlinks: HashSet::new(),
+                embedded_by: HashSet::new(),
             },
         );
     }
@@ -115,6 +131,24 @@ impl Callback {
                 parent: None,
                 is_parent_specified: false,
                 backlinks: HashSet::from_iter(backlinks),
+                embedded_by: HashSet::new(),
+            },
+        );
+    }
+
+    /// Record that `host` embeds `child_slug`, without asserting parentage.
+    ///
+    /// Paired with `insert_parent` at the embed site rather than replacing it:
+    /// the parent drives the breadcrumb and can be overridden by the child,
+    /// while this is the durable record that the embed happened.
+    pub fn insert_embedded_by(&mut self, child_slug: Slug, host: Slug) {
+        self.insert(
+            child_slug,
+            CallbackValue {
+                parent: None,
+                is_parent_specified: false,
+                backlinks: HashSet::new(),
+                embedded_by: HashSet::from([host]),
             },
         );
     }

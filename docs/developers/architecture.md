@@ -15,7 +15,7 @@ wanshi is organized around these responsibilities:
 - Environment layer: loads configuration, derives project paths, exposes mode-aware accessors, imports themes and HTML snippets, and manages cache/hash paths. Optional project-root HTML snippets extend or replace the generated document head; two of them are additive (extra metadata, extra styles) and two replace built-in defaults (font imports, math imports). All of them, plus configured theme fragments, participate in serve-mode watching.
 - Source scanner: discovers `.typ` source files, records their slug, and handles read-only scans for checks.
 - Parser layer: converts Typst source files into unresolved sections containing metadata plus plain or lazy content.
-- Compiler state: resolves embeds and links into a graph of compiled sections, detects cyclic embeds, records parent relationships, references, and backlinks.
+- Compiler state: resolves embeds and links into a graph of compiled sections, detects cyclic embeds, records parent relationships, references, backlinks, and the hosts that embed each section.
 - Writer: renders compiled sections into complete HTML documents, footers, catalogs, headers, and RSS-safe content.
 - Artifact writer: writes optional metadata and graph JSON, RSS feeds, static runtime files, and copied assets.
 - Serve session: maintains in-memory state for local preview and performs incremental rebuilds based on watcher dirty sets.
@@ -29,7 +29,7 @@ The main domain objects are:
 - Source section: a source file can produce one or more sections.
 - Unresolved section: metadata plus content that may contain lazy local links and embeds.
 - Compiled section: fully resolved content whose children, references, metadata, options, and footer behavior are known.
-- Callback graph: parent and backlink information collected while resolving lazy content.
+- Callback graph: parent, backlink, and embedding-host information collected while resolving lazy content.
 - Compile state: the full set of compiled sections plus graph state.
 
 ## Source Discovery

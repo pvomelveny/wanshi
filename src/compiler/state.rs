@@ -174,6 +174,21 @@ impl CompileState {
                             }
                             callback.insert_parent(child_slug, slug);
 
+                            // The durable record that this embed happened.
+                            // `insert_parent` alone is not enough: `parent`
+                            // holds one slug, and a parent the child declares
+                            // for itself displaces the embedder, so a note that
+                            // is embedded *and* names its own parent would keep
+                            // no trace of being embedded at all.
+                            //
+                            // `asback` is deliberately not consulted. It is
+                            // documented as governing a page's *links*, and a
+                            // hub that embeds notes is usually exactly the page
+                            // you want listed under "Found in".
+                            if child_slug != slug && backlinks_enabled(shallows, child_slug)? {
+                                callback.insert_embedded_by(child_slug, slug);
+                            }
+
                             let mut child_section = refered.clone();
                             child_section.option = embed_content.option.clone();
                             if let Some(title) = &embed_content.title {
@@ -515,6 +530,76 @@ mod tests {
         assert_eq!(subsection_slug(Slug::new("index"), "./a.b"), "a.b");
 
         assert_eq!(subsection_slug(Slug::new("a/b"), "/c/d.typst"), "c/d");
+    }
+
+    fn embed(url: &str) -> LazyContent {
+        LazyContent::Embed(EmbedContent {
+            url: url.to_string(),
+            title: None,
+            option: SectionOption::default(),
+        })
+    }
+
+    #[test]
+    fn test_embedding_records_the_host_on_the_child() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("host"),
+            shallow_with_content("host", HTMLContent::Lazy(vec![embed("/child.typst")])),
+        );
+        shallows.insert(Slug::new("child"), shallow("child"));
+
+        let state = compile_all(&shallows).unwrap();
+        let child = state.callback().0.get(&Slug::new("child")).unwrap();
+
+        assert!(child.embedded_by.contains(&Slug::new("host")));
+        // Containment is not citation; the two edges stay separate.
+        assert!(child.backlinks.is_empty());
+    }
+
+    #[test]
+    fn test_embedded_by_records_only_the_direct_host() {
+        // `outer` embeds `middle` embeds `inner`. `inner` is contained by
+        // `middle`, and only transitively by `outer`.
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("outer"),
+            shallow_with_content("outer", HTMLContent::Lazy(vec![embed("/middle.typst")])),
+        );
+        shallows.insert(
+            Slug::new("middle"),
+            shallow_with_content("middle", HTMLContent::Lazy(vec![embed("/inner.typst")])),
+        );
+        shallows.insert(Slug::new("inner"), shallow("inner"));
+
+        let state = compile_all(&shallows).unwrap();
+        let inner = state.callback().0.get(&Slug::new("inner")).unwrap();
+
+        assert!(inner.embedded_by.contains(&Slug::new("middle")));
+        assert!(
+            !inner.embedded_by.contains(&Slug::new("outer")),
+            "one level down only"
+        );
+    }
+
+    #[test]
+    fn test_embedded_by_records_every_host() {
+        // The case `parent` cannot represent: it keeps one slug and warns.
+        let mut shallows = HashMap::new();
+        for host in ["alpha", "beta"] {
+            shallows.insert(
+                Slug::new(host),
+                shallow_with_content(host, HTMLContent::Lazy(vec![embed("/shared.typst")])),
+            );
+        }
+        shallows.insert(Slug::new("shared"), shallow("shared"));
+
+        let state = compile_all(&shallows).unwrap();
+        let shared = state.callback().0.get(&Slug::new("shared")).unwrap();
+
+        assert_eq!(shared.embedded_by.len(), 2);
+        assert!(shared.embedded_by.contains(&Slug::new("alpha")));
+        assert!(shared.embedded_by.contains(&Slug::new("beta")));
     }
 
     #[test]

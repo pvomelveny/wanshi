@@ -22,6 +22,10 @@ struct GraphSection {
     parent_specified: bool,
     references: Vec<Slug>,
     backlinks: Vec<Slug>,
+    /// Sections that embed this one. Unlike `parent`, which holds a single slug
+    /// and is displaced by one the section declares for itself, this records
+    /// every embedder.
+    embedded_by: Vec<Slug>,
 }
 
 pub(super) fn graph_snapshot(state: &state::CompileState) -> GraphSnapshot {
@@ -46,6 +50,11 @@ pub(super) fn graph_snapshot(state: &state::CompileState) -> GraphSnapshot {
             .unwrap_or_default();
         backlinks.sort();
 
+        let mut embedded_by: Vec<Slug> = callback
+            .map(|value| value.embedded_by.iter().copied().collect())
+            .unwrap_or_default();
+        embedded_by.sort();
+
         sections.insert(
             slug,
             GraphSection {
@@ -53,6 +62,7 @@ pub(super) fn graph_snapshot(state: &state::CompileState) -> GraphSnapshot {
                 parent_specified,
                 references,
                 backlinks,
+                embedded_by,
             },
         );
     }

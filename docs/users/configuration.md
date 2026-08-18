@@ -47,10 +47,13 @@ edit = "[edit]"
 toc = "Table of Contents"
 references = "References"
 backlinks = "Backlinks"
+embedded-by = "Found in"
 search = "Search  /"
 ```
 
-These values customize interface labels in generated pages.
+These values customize interface labels in generated pages. `embedded-by` names
+the footer section listing the notes that embed this one — see
+[Found in](links-and-references.md#found-in).
 
 ## `[build]`
 

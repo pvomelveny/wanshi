@@ -6,7 +6,7 @@ connective primitives, and every one of them feeds the same underlying graph:
 | Primitive | Helper | What it does |
 | --- | --- | --- |
 | **Local link** | `local()` | Inline link to another section. May create a reference and a backlink. |
-| **Embed** | `embed()` | Renders another section's full content inside this one, and makes this section its parent. |
+| **Embed** | `embed()` | Renders another section's full content inside this one, makes this section its parent, and records this section under the target's **Found in**. |
 | **External link** | `external()` | Ordinary link off-site. Not part of the graph. |
 
 References and backlinks are then *derived* from those links — you never write
@@ -215,6 +215,10 @@ changing what the graph records.
 A **backlink** is the reverse edge: page A links to page B, so B lists A. They
 are generated automatically for every local link, with no authoring effort.
 
+Embedding is tracked separately, under **Found in** — see below. Citing a note
+and containing one are different relationships, so they are answered separately
+rather than pooled.
+
 A backlink from A to B is recorded when all of these hold:
 
 - A and B are different sections (a self-link does not backlink),
@@ -228,6 +232,32 @@ So the switches are:
 | `"backlinks": "false"` | the **target** | This page never displays backlinks. |
 | `"asback": "false"` | the **linker** | This page's links never create backlinks elsewhere. Useful for indexes and hub pages that would otherwise backlink to everything. |
 | `"transparent-backlinks": "true"` | the target | Show backlinks even when this section appears embedded in another page (except inside footers). |
+
+## Found in
+
+The reverse edge of an embed: page A embeds page B, so B lists A. Like backlinks
+it is automatic, and it appears as its own footer section.
+
+It exists because an embed's other trace is easy to lose. Embedding also makes A
+the parent of B, which is what draws B's breadcrumb — but `parent` holds a single
+slug, and one that B declares for itself replaces the embedder entirely. Since
+declaring a parent is the recommended fix for a note embedded in several places,
+following that advice used to erase every record of the embedding. Found in does
+not have that problem: it records every host.
+
+Two properties worth knowing:
+
+- **Direct hosts only.** If A embeds B and B embeds C, then C's Found in lists B,
+  not A. The relationship recorded is containment by one level, not reachability.
+- **Always rendered as links**, whatever `[build].footer-mode` says. A host
+  contains the note whose page you are reading, so rendering one in `embed` mode
+  would print the page inside its own footer.
+
+A named subtree is an embed, so it lists the note it was written in — which is
+also what its breadcrumb says. `"backlinks": "false"` on the target suppresses
+Found in along with backlinks; `"asback": "false"` does **not**, because it
+governs a page's links, and a page that embeds notes is usually one you want
+listed.
 
 ## Footer Rendering
 
@@ -292,13 +322,15 @@ that what you wrote is what wanshi understood:
       "parent": "index",
       "parent_specified": false,
       "references": ["refs/knuth"],
-      "backlinks": ["index"]
+      "backlinks": ["index"],
+      "embedded_by": []
     },
     "refs/knuth": {
       "parent": "index",
       "parent_specified": false,
       "references": [],
-      "backlinks": ["notes/alice", "notes/bob"]
+      "backlinks": ["notes/alice", "notes/bob"],
+      "embedded_by": ["notes/alice"]
     }
   }
 }
@@ -308,6 +340,11 @@ that what you wrote is what wanshi understood:
 `false` means the parent was derived — from whatever embedded the section, or
 failing that from the nearest enclosing directory index. See
 [Grouping Notes into Categories](writing-notes.md#grouping-notes-into-categories).
+
+`embedded_by` lists every section that embeds this one, and is the reliable
+record of that: `parent` holds a single slug and is displaced when a section
+declares its own, so a note embedded in several places, or one that names its
+parent, is only fully described here.
 
 ## A Worked Example
 
