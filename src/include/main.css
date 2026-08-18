@@ -732,17 +732,24 @@ nav {
    three-`ul` rule, and no rule is more specific, so the size clamps exactly
    where the glyph does. */
 nav#toc ul ul a.bullet {
-  font-size: 0.75em;
+  font-size: 0.9em;
 }
 
 nav#toc ul ul ul a.bullet {
-  font-size: 0.62em;
+  font-size: 0.74em;
 }
 
 nav#toc a.bullet {
   opacity: 0.7;
+  /* These glyphs carry a lot of side bearing, so at the row's own size they
+     read smaller than the text beside them rather than level with it. The
+     nested sizes above are this times the same 0.75 and 0.62 they always
+     were. */
+  font-size: 1.2em;
   margin-left: 0.4rem;
-  margin-right: 0.3rem;
+  /* No right margin: `li.entry` already sets `column-gap`, and the two together
+     stood the bullet twice as far from its title as a listing row does with the
+     gap alone. */
   padding-left: 0.2rem;
   padding-right: 0.2rem;
   text-decoration: none;
