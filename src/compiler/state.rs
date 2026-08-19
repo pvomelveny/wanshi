@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    callback::{Callback, CallbackValue},
+    callback::{AmbiguousParent, Callback, CallbackValue},
     section::{
         HTMLContent, LazyContent, Section, SectionContent, SectionContents, UnresolvedSection,
     },
@@ -340,6 +340,7 @@ impl CompileState {
     fn normalize_internal_anonymous_graph(&mut self) {
         let internal_slugs = self.collect_internal_anonymous_slugs();
         if internal_slugs.is_empty() {
+            self.report_ambiguous_parents(&HashMap::new());
             return;
         }
 
@@ -385,11 +386,37 @@ impl CompileState {
             }
         }
 
+        self.report_ambiguous_parents(&visible_hosts);
+
         self.callback
             .0
             .retain(|slug, _| !internal_slugs.contains(slug));
         self.compiled
             .retain(|slug, _| !internal_slugs.contains(slug));
+    }
+
+    /// Report sections embedded from two places, now that the hosts can be
+    /// named in slugs the author wrote.
+    ///
+    /// Two conditions are checked here rather than where the conflict was
+    /// noticed, and both need the normalized graph. A host that is not
+    /// published resolves to the section that is, so the warning names
+    /// something addressable — `"parent": "index/:options"` is not advice
+    /// anyone can take. And once both hosts have resolved they are often the
+    /// *same* section: a note embedded under two headings of one page has one
+    /// parent and no ambiguity, and warning about it would be noise on every
+    /// build.
+    fn report_ambiguous_parents(&mut self, visible_hosts: &HashMap<Slug, Option<Slug>>) {
+        let ambiguous = self.callback.take_ambiguous_parents();
+        for (child, kept, discarded) in reportable_ambiguities(ambiguous, visible_hosts) {
+            color_print::ceprintln!(
+                "<y>Warning: `{}` is embedded in both `{}` and `{}`; using `{}` as its parent.\n         Set `\"parent\"` in its metadata to choose deliberately.</>",
+                child,
+                kept,
+                discarded,
+                kept
+            );
+        }
     }
 
     fn collect_internal_anonymous_slugs(&self) -> HashSet<Slug> {
@@ -468,6 +495,32 @@ pub(super) fn nearest_directory_index(slug: Slug, exists: impl Fn(Slug) -> bool)
     }
 
     root
+}
+
+/// Which recorded ambiguities are worth telling the author about, expressed in
+/// the slugs they wrote.
+///
+/// Each host resolves through `visible_hosts` the way an edge does. Two that
+/// resolve to the same section were never ambiguous — a note embedded under two
+/// headings of one page has exactly one parent — and one that resolves to
+/// nothing has no host to name.
+fn reportable_ambiguities(
+    ambiguous: Vec<AmbiguousParent>,
+    visible_hosts: &HashMap<Slug, Option<Slug>>,
+) -> Vec<(Slug, Slug, Slug)> {
+    let visible = |slug: Slug| match visible_hosts.get(&slug) {
+        Some(host) => *host,
+        None => Some(slug),
+    };
+
+    ambiguous
+        .into_iter()
+        .filter_map(|entry| {
+            let kept = visible(entry.kept)?;
+            let discarded = visible(entry.discarded)?;
+            (kept != discarded).then_some((entry.child, kept, discarded))
+        })
+        .collect()
 }
 
 /// Re-attribute edges away from sections that are about to be deleted.
@@ -952,6 +1005,70 @@ mod tests {
             backlinks.is_empty(),
             "index should not backlink to itself, got {:?}",
             backlinks
+        );
+    }
+
+    fn ambiguity(child: &str, kept: &str, discarded: &str) -> AmbiguousParent {
+        AmbiguousParent {
+            child: Slug::new(child),
+            kept: Slug::new(kept),
+            discarded: Slug::new(discarded),
+        }
+    }
+
+    /// Two headings on one page are one parent. Reporting the raw hosts would
+    /// warn on every build about an ambiguity the reader cannot see and the
+    /// author cannot resolve — and would advise setting `parent` to a slug that
+    /// is not published.
+    #[test]
+    fn test_two_hosts_on_the_same_page_are_not_an_ambiguity() {
+        let visible_hosts = HashMap::from([
+            (Slug::new("page/:one"), Some(Slug::new("page"))),
+            (Slug::new("page/:two"), Some(Slug::new("page"))),
+        ]);
+        let reported = reportable_ambiguities(
+            vec![ambiguity("shared", "page/:one", "page/:two")],
+            &visible_hosts,
+        );
+        assert!(reported.is_empty(), "got {reported:?}");
+    }
+
+    /// A real ambiguity is still reported, in the slugs the author wrote rather
+    /// than the synthesised ones the headings carry.
+    #[test]
+    fn test_a_real_ambiguity_is_reported_with_visible_slugs() {
+        let visible_hosts = HashMap::from([
+            (Slug::new("a/:background"), Some(Slug::new("a"))),
+            (Slug::new("b/:background"), Some(Slug::new("b"))),
+        ]);
+        let reported = reportable_ambiguities(
+            vec![ambiguity("shared", "a/:background", "b/:background")],
+            &visible_hosts,
+        );
+        assert_eq!(
+            reported,
+            vec![(Slug::new("shared"), Slug::new("a"), Slug::new("b"))]
+        );
+    }
+
+    /// A host that resolves to nothing cannot be named, so there is no advice
+    /// to give.
+    #[test]
+    fn test_an_unresolvable_host_is_not_reported() {
+        let visible_hosts = HashMap::from([(Slug::new("gone/:one"), None)]);
+        let reported =
+            reportable_ambiguities(vec![ambiguity("shared", "gone/:one", "b")], &visible_hosts);
+        assert!(reported.is_empty(), "got {reported:?}");
+    }
+
+    /// Nothing is dropped when no heading is involved: hosts absent from the
+    /// map are already visible and pass straight through.
+    #[test]
+    fn test_hosts_that_are_already_visible_pass_through() {
+        let reported = reportable_ambiguities(vec![ambiguity("shared", "a", "b")], &HashMap::new());
+        assert_eq!(
+            reported,
+            vec![(Slug::new("shared"), Slug::new("a"), Slug::new("b"))]
         );
     }
 

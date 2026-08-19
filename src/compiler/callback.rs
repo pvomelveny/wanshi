@@ -31,16 +31,39 @@ pub struct CallbackValue {
     pub embedded_by: HashSet<Slug>,
 }
 
+/// A section embedded from two places, and the two hosts that claimed it.
+///
+/// Held rather than reported at the point it is noticed, because at that point
+/// the hosts may be sections that will not survive publication — a heading is
+/// one — and a warning naming them would name something the author cannot
+/// address. See [`Callback::ambiguous_parents`].
 #[derive(Debug)]
-pub struct Callback(pub HashMap<Slug, CallbackValue>);
+pub struct AmbiguousParent {
+    pub child: Slug,
+    pub kept: Slug,
+    pub discarded: Slug,
+}
+
+/// `.0` is the recorded graph; `.1` is deferred diagnostics, private so nothing
+/// reports them before the graph is normalized.
+#[derive(Debug)]
+pub struct Callback(pub HashMap<Slug, CallbackValue>, Vec<AmbiguousParent>);
 
 impl Callback {
     pub fn new() -> Callback {
-        Callback(HashMap::new())
+        Callback(HashMap::new(), Vec::new())
     }
 
     pub fn merge(&mut self, other: Callback) {
-        other.0.into_iter().for_each(|(s, t)| self.insert(s, t));
+        let Callback(entries, ambiguous) = other;
+        entries.into_iter().for_each(|(s, t)| self.insert(s, t));
+        self.1.extend(ambiguous);
+    }
+
+    /// The ambiguities noticed while merging, to be reported once the graph is
+    /// normalized and the slugs involved are ones the author wrote.
+    pub fn take_ambiguous_parents(&mut self) -> Vec<AmbiguousParent> {
+        std::mem::take(&mut self.1)
     }
 
     pub fn insert(&mut self, child_slug: Slug, value: CallbackValue) {
@@ -78,15 +101,15 @@ impl Callback {
                     // legitimate thing to do — a shared definition, say — but
                     // only one of them can be the parent, and which one is
                     // decided by compilation order rather than by anything the
-                    // author intended. Say so, and say how to decide it.
+                    // author intended. Held, not reported: two hosts that both
+                    // resolve to the same published section are no ambiguity at
+                    // all, and only the normalized graph knows that.
                     (Some(current), Some(incoming)) if current != incoming => {
-                        color_print::ceprintln!(
-                            "<y>Warning: `{}` is embedded in both `{}` and `{}`; using `{}` as its parent.\n         Set `\"parent\"` in its metadata to choose deliberately.</>",
-                            child_slug,
-                            current,
-                            incoming,
-                            current
-                        );
+                        self.1.push(AmbiguousParent {
+                            child: child_slug,
+                            kept: current,
+                            discarded: incoming,
+                        });
                     }
                     (Some(_), Some(_)) => {}
                 }
