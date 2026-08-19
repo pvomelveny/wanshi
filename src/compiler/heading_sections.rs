@@ -215,7 +215,7 @@ fn find_heading(html: &str, from: usize) -> Option<Heading> {
         let start = cursor + found;
         let digit = bytes.get(start + 2).copied();
         let level = match digit {
-            Some(d) if d.is_ascii_digit() && (b'1'..=b'6').contains(&d) => d - b'0',
+            Some(d) if (b'1'..=MAX_HEADING_LEVEL + b'0').contains(&d) => d - b'0',
             _ => {
                 cursor = start + 2;
                 continue;
@@ -232,7 +232,7 @@ fn find_heading(html: &str, from: usize) -> Option<Heading> {
         };
 
         return Some(Heading {
-            level: level.min(MAX_HEADING_LEVEL),
+            level,
             start,
             end: close_start + close.len(),
             title: html[open_end..close_start].to_string(),

@@ -596,11 +596,10 @@ impl Writer {
         }
     }
 
-    /// Render-time formatting of a section's taxon.
+    /// The two labels a section title can carry: its taxon, and its number.
     ///
     /// The metadata holds the taxon exactly as authored; capitalisation and the
     /// trailing ". " separator are applied here, at the point of display.
-    /// The two labels a section title can carry: its taxon, and its number.
     ///
     /// Only one of them ever holds the number. A taxon'd block reads
     /// `Definition 1.1.`, with the digits inside the pill, the way a statement
@@ -609,8 +608,10 @@ impl Writer {
     /// spellings are conventional, and which one applies is decided by whether
     /// there is a word for the number to attach to.
     ///
-    /// The counter steps for either, so an unnumbered taxon and a numbered
-    /// heading share one sequence rather than each keeping their own.
+    /// The same answer decides which sequence the section counts in, so the
+    /// number it shows and the sequence it belongs to cannot disagree. An
+    /// unnumbered section takes nothing from either sequence and passes both on
+    /// untouched, which is what leaves it transparent to what it contains.
     fn label(section: &Section, counter: &mut Counter, numbering: bool) -> Label {
         let text = section.metadata.taxon().map_or("", |s| s);
         if !numbering {
