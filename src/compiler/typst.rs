@@ -3,6 +3,7 @@
 // Authors: Alias Qli (@AliasQli), Spore (@s-cerevisiae), Kokic (@kokic)
 
 use super::anonymous_slug::AnonymousSlugState;
+use super::heading_sections::split_heading_sections;
 use super::subtree_slug::{ensure_unique_section_slugs, resolve_subtree_slug};
 use camino::Utf8Path;
 use eyre::{eyre, WrapErr};
@@ -22,6 +23,18 @@ use crate::{
 };
 
 use std::{borrow::Cow, collections::HashSet, str};
+
+/// Parse an attribute that may also decline to decide.
+///
+/// `None` and `auto` both mean "unset", which is how a block says it wants
+/// whatever the page chose. Everything else reads as [`parse_bool`] does.
+fn parse_tristate(m: Option<&Cow<'_, str>>) -> Option<bool> {
+    match m.map(|s| s.as_ref()) {
+        None | Some("auto") => None,
+        Some("false") | Some("0") | Some("none") => Some(false),
+        _ => Some(true),
+    }
+}
 
 fn parse_bool(m: Option<&Cow<'_, str>>, def: bool) -> bool {
     match m.map(|s| s.as_ref()) {
@@ -101,7 +114,7 @@ fn parse_typst_html(
 
                 let url = attr("url")?.to_string();
                 let title = value();
-                let numbering = parse_bool(span.attrs.get("numbering"), def.numbering);
+                let numbering = parse_tristate(span.attrs.get("numbering"));
                 let details_open = parse_bool(span.attrs.get("open"), def.details_open);
                 let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
                 builder.push(LazyContent::Embed(EmbedContent {
@@ -114,6 +127,15 @@ fn parse_typst_html(
                 let url = attr(KEY_SLUG)?.to_string();
                 let text = value();
                 builder.push(LazyContent::Local(LocalLink { url, text }))
+            }
+            HTMLTagKind::Outdent => {
+                if !allow_subtree {
+                    return Err(eyre!(
+                        "typst outdent tag is not allowed in metadata value while parsing `{}`",
+                        source_slug
+                    ));
+                }
+                builder.push(LazyContent::Outdent)
             }
             HTMLTagKind::Query => {
                 if !allow_subtree {
@@ -196,7 +218,7 @@ fn parse_typst_html(
                 };
 
                 let def = SectionOption::default();
-                let numbering = parse_bool(span.attrs.get("numbering"), def.numbering);
+                let numbering = parse_tristate(span.attrs.get("numbering"));
                 let details_open = parse_bool(span.attrs.get("open"), def.details_open);
                 let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
                 let option = SectionOption::new(numbering, details_open, catalog);
@@ -316,14 +338,49 @@ fn parse_typst_sections_from_html(
     };
     let content = parse_typst_html(&mut ctx, html_str, source_slug, &mut metadata, true)?;
 
-    let mut sections = vec![(
+    // Turn each content stream's headings into sections. Every stream is split
+    // on its own, which is what keeps `#outdent()` from escaping the subtree it
+    // was written in: it can only close frames this pass opened.
+    let mut sections = Vec::with_capacity(subtree_sections.len() + 1);
+    let mut heading_sections = Vec::new();
+
+    let split = split_heading_sections(
+        content,
+        source_slug,
+        source_slug,
+        ext,
+        &mut used_slugs,
+        &mut anonymous_slugs,
+    );
+    heading_sections.extend(split.sections);
+    sections.push((
         source_slug,
         UnresolvedSection {
             metadata: HTMLMetaData(metadata),
-            content,
+            content: split.content,
         },
-    )];
-    sections.extend(subtree_sections);
+    ));
+
+    for (slug, section) in subtree_sections {
+        let split = split_heading_sections(
+            section.content,
+            slug,
+            source_slug,
+            ext,
+            &mut used_slugs,
+            &mut anonymous_slugs,
+        );
+        heading_sections.extend(split.sections);
+        sections.push((
+            slug,
+            UnresolvedSection {
+                content: split.content,
+                metadata: section.metadata,
+            },
+        ));
+    }
+
+    sections.extend(heading_sections);
     ensure_unique_section_slugs(&sections, source_slug, "typst subtree")?;
     Ok(sections)
 }
@@ -344,6 +401,22 @@ pub fn parse_typst_sections<P: AsRef<Utf8Path>>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_parse_tristate_defers_when_unset_or_auto() {
+        assert_eq!(super::parse_tristate(None), None);
+        assert_eq!(super::parse_tristate(Some(&Cow::from("auto"))), None);
+    }
+
+    #[test]
+    fn test_parse_tristate_reads_explicit_answers() {
+        for off in ["false", "0", "none"] {
+            assert_eq!(super::parse_tristate(Some(&Cow::from(off))), Some(false));
+        }
+        for on in ["true", "1", "yes"] {
+            assert_eq!(super::parse_tristate(Some(&Cow::from(on))), Some(true));
+        }
+    }
+
     use super::*;
     use crate::{
         compiler::{
@@ -384,7 +457,7 @@ mod tests {
             .expect("expected subtree embed");
         assert_eq!(embed.url, "/book/child");
         assert_eq!(embed.title.as_deref(), Some("Child"));
-        assert!(embed.option.numbering);
+        assert_eq!(embed.option.numbering, Some(true));
 
         let child = find_section(&sections, Slug::new("book/child"));
         assert_eq!(

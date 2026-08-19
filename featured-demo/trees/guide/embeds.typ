@@ -60,8 +60,9 @@ An explicit `parent` beats an embedding one and never loses to it.
 
 An embedded note may embed one of its own, and the whole chain renders in
 place. The block below is #local("/guide/chain-middle"), which embeds
-#local("/guide/chain-inner") — so this page shows three levels at once,
-indented, with the table of contents matching.
+#local("/guide/chain-inner") — so this page shows the whole chain at once,
+indented, with the table of contents matching. The heading it sits under counts
+as a level of its own, which puts the innermost note three deep.
 
 #embed("/guide/chain-middle", "A note that embeds another")
 
@@ -119,3 +120,43 @@ Embed when the material is genuinely its own note — something you would want t
 link to, cite, or find in a listing — but which also belongs in the middle of
 this argument. If it is only ever going to be read here, write it here, or make
 it a subtree: see #local("/guide/subtrees").
+
+= Headings hold embeds
+
+Every `=` on this page opened a section, and each embed above landed inside the
+one it was written under — look at the table of contents, which indents *A note
+that embeds another* under *Embeds chain* to match. Only *Typst, embedded here
+in full* is at the outer level, because it was written before the first heading.
+
+Containment does not depend on the catalog. *Knuth, collapsed* has
+`catalog: false`, so it has no row to indent, and it still sits inside *Options*
+in the article — scroll up and it is one step further in than the heading above
+it.
+
+A heading holding an embed does not adopt it. Follow #local("/refs/knuth-1984")
+and its breadcrumb still reads *References*, and its *Found in* still names this
+page rather than *Options*. Headings order a page; they are not identities.
+
+#subtree(title: "Getting back out", taxon: "observation")[
+  The usual way out of a heading is another heading — the next `=` ends the one
+  before it. `#outdent()` is for when you want out without writing one:
+
+  ```typst
+  = Headings hold embeds
+  #embed("/refs/typst", "Inside the heading")
+
+  #outdent()
+  #embed("/refs/typst", "Back at the top level")
+  ```
+
+  Each call steps out one level. With no heading open it does nothing, so moving
+  a heading around cannot turn a working note into a failing build.
+]
+
+#outdent()
+
+#subtree(title: "Written after #outdent()", taxon: "observation")[
+  This block belongs to the note rather than to *Headings hold embeds*, even
+  though it was written below it. In the table of contents it is the last row at
+  the outer level, not one indented under that heading.
+]

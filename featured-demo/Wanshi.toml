@@ -33,6 +33,9 @@ inline-script = false
 # citation. This forest instead marks individual notes with `"asref": "true"`,
 # which is what `refs/` demonstrates.
 asref = false
+# Off site-wide. `math/fixed-point` turns it on for itself with a `numbering`
+# key, which is how one worked example can be numbered while the guide is not.
+numbering = false
 output = "./publish"
 search = true
 search-content = true

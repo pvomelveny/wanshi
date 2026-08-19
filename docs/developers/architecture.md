@@ -94,14 +94,27 @@ Project creation and initialization generate a config file, source directory, as
 
 Typst source processing first asks Typst to render the source into HTML. wanshi then parses structured marker elements emitted by wanshi's Typst library.
 
-The marker parser recognizes metadata, local links, embeds, and subtrees:
+The marker parser recognizes metadata, local links, embeds, subtrees, and outdents:
 
 - Metadata markers (`wanshi-meta`) either carry a plain value attribute or nested marker/body HTML that is recursively parsed into rich content.
 - Embed markers (`wanshi-embed`) carry a target URL, optional title, and boolean-like options. Missing or `auto` option values keep defaults; `false`, `0`, and `none` disable an option; other present values enable it.
 - Local markers (`wanshi-local`) produce lazy local-link content with an already resolved target slug or URL.
 - Subtree markers (`wanshi-subtree`) produce additional unresolved sections and insert a lazy embed into the current section.
+- Outdent markers (`wanshi-outdent`) carry nothing and survive only as a position in the content stream, which the heading pass below consumes.
+
+The set of recognized names is written twice — as a regex alternation in `HTMLParser::new` and as a match in `HTMLTagKind::new` — and a name present in the second but absent from the first fails silently, because an element matching no marker is copied into the output verbatim. A test walks every kind through the parser to keep the two in step.
 
 Subtree parsing resolves named subtrees relative to the directory of the current slug, generates internal slugs for anonymous subtrees, and treats `title`/`taxon` attributes as defaults only when the subtree content does not provide those metadata fields itself.
+
+### Headings become sections
+
+Typst emits `=` as a flat `<h2>` in a chunk of body HTML, so on its own a heading can label content but not contain it. Once each content stream is parsed, `heading_sections::split_heading_sections` reads the outline back out of it and rebuilds it as sections: a heading opens a frame that everything after it accumulates into, a heading at the same or a shallower level closes it, and an outdent marker closes one level. Frames left open at the end of the stream are closed there.
+
+Each stream is split separately — the file's own content, then each subtree's — which is what confines an outdent to the subtree it was written in. Splitting runs before sections are assembled, so no outdent marker ever reaches the cache or the graph compiler.
+
+Synthesized sections are marked internal-anonymous and are named after their heading text rather than an ordinal, because the slug is also the heading's `[#]` anchor and ordinals renumber every anchor below any heading that is inserted. Text that is empty after markup is stripped, or that collides with an existing slug, falls back to the ordinal allocator.
+
+Because they are internal-anonymous, headings order a page without acquiring identity: they are stripped from the published graph, so a note embedded under a heading still reports the page as its parent and still appears in listings under the page.
 
 Failures are wrapped with source and slug context because the Typst phase crosses a process boundary and may fail due to syntax errors, missing packages, unavailable fonts, or environmental issues.
 
@@ -116,7 +129,7 @@ The graph compiler starts from `index` when present, then compiles any remaining
 
 The compiler keeps a visiting stack to detect embed cycles and reports the full cycle chain. Missing embed targets are hard errors. Missing local link targets are surfaced by check diagnostics.
 
-Anonymous internal subtree slugs are normalized so they do not leak into the visible reference/backlink graph.
+Anonymous internal subtree slugs are normalized so they do not leak into the visible reference/backlink graph. Parents, backlinks, and embed edges naming one are lifted to the nearest section that survives publication rather than discarded: the link or embed did happen, and to a reader it was written by the page. An edge that would then point a section at itself is dropped, as is one whose chain reaches no visible section.
 
 ## Graph Algorithm Details
 

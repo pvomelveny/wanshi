@@ -34,16 +34,35 @@ fn catalog_bullet(level: u8) -> &'static str {
     CATALOG_BULLET_SYMBOLS[index.min(CATALOG_BULLET_SYMBOLS.len() - 1)]
 }
 
-pub fn html_article_inner(
-    metadata: &EntryMetaData,
-    contents: &String,
-    hide_metadata: bool,
-    open: bool,
-    adhoc_title: Option<&str>,
-    adhoc_taxon: Option<&str>,
-    level: u8,
-) -> eyre::Result<String> {
-    let summary = metadata.to_header(adhoc_title, adhoc_taxon, !hide_metadata, level)?;
+/// One rendered section: its header, and its contents beneath.
+///
+/// Grouped into a struct for the same reason [`CatalogItemArgs`] is — the list
+/// had grown to eight, half of them adjacent `bool`s and `Option<&str>`s that a
+/// caller can transpose without the compiler noticing.
+pub struct ArticleInnerArgs<'a> {
+    pub metadata: &'a EntryMetaData,
+    pub contents: &'a String,
+    pub hide_metadata: bool,
+    pub open: bool,
+    pub adhoc_title: Option<&'a str>,
+    pub adhoc_taxon: Option<&'a str>,
+    /// Section number, or empty. See [`HtmlHeaderArgs::number`].
+    pub number: &'a str,
+    pub level: u8,
+}
+
+pub fn html_article_inner(args: ArticleInnerArgs<'_>) -> eyre::Result<String> {
+    let ArticleInnerArgs {
+        metadata,
+        contents,
+        hide_metadata,
+        open,
+        adhoc_title,
+        adhoc_taxon,
+        number,
+        level,
+    } = args;
+    let summary = metadata.to_header(adhoc_title, adhoc_taxon, number, !hide_metadata, level)?;
 
     let article_id = metadata.id()?;
     Ok(html_section(
@@ -98,6 +117,9 @@ pub struct CatalogItemArgs<'a> {
     pub page_title: &'a str,
     pub details_open: bool,
     pub taxon: &'a str,
+    /// Section number, or empty. Mutually exclusive with a number inside
+    /// `taxon`: a taxon'd section carries its number in the pill instead.
+    pub number: &'a str,
     pub child_html: &'a str,
     /// Anonymous subtrees have no page of their own, so their row links to an
     /// anchor on the current page instead.
@@ -113,6 +135,7 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
         page_title,
         details_open,
         taxon,
+        number,
         child_html,
         use_hash_href,
         level,
@@ -138,6 +161,7 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
     html!(li class={class_name.join(" ")} {
         a class="bullet" href={href} title={title_text} { (catalog_bullet(level)) }
         span class="link local" onclick={onclick} {
+            span class="section-number" { (number) }
             span class="taxon" { (taxon) }
             span class="title" { (title) }
         }

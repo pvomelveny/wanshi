@@ -58,6 +58,14 @@ pub const KEY_REFERENCES: &str = "references";
 /// A collection page displays metadata of child entries.
 pub const KEY_COLLECT: &str = "collect";
 
+/// `numbering: bool`:
+/// Whether the sections of this page carry numbers. Falls back to
+/// `[build].numbering`. Read from the page being rendered, so an embedded note
+/// follows the page it appears in rather than its own file — a number describes
+/// a position on a page, and the same note holds different positions on
+/// different pages.
+pub const KEY_NUMBERING: &str = "numbering";
+
 /// `asref: bool`:
 /// Controls whether the current page process as reference.
 /// Default is `false`.
@@ -76,7 +84,7 @@ pub const KEY_FOOTER_SORT_BY: &str = "footer-sort-by";
 
 const FANCY_METADATA: [&str; 2] = [KEY_TITLE, KEY_TAXON];
 
-const PLAIN_METADATA: [&str; 16] = [
+const PLAIN_METADATA: [&str; 17] = [
     KEY_SLUG,
     KEY_EXT,
     KEY_DATA_TAXON,
@@ -89,6 +97,7 @@ const PLAIN_METADATA: [&str; 16] = [
     KEY_TRANSPARENT_BACKLINKS,
     KEY_REFERENCES,
     KEY_COLLECT,
+    KEY_NUMBERING,
     KEY_ASREF,
     KEY_ASBACK,
     KEY_FOOTER_MODE,
@@ -206,6 +215,11 @@ where
         self.get_bool(KEY_COLLECT).map(|v| v.unwrap_or(false))
     }
 
+    /// `None` when the note says nothing, leaving the site default to decide.
+    fn numbering(&self) -> eyre::Result<Option<bool>> {
+        self.get_bool(KEY_NUMBERING)
+    }
+
     fn is_asref(&self) -> eyre::Result<Option<bool>> {
         self.get_bool(KEY_ASREF)
     }
@@ -274,6 +288,7 @@ impl EntryMetaData {
         &self,
         adhoc_title: Option<&str>,
         adhoc_taxon: Option<&str>,
+        number: &str,
         show_extra: bool,
         level: u8,
     ) -> eyre::Result<String> {
@@ -304,6 +319,7 @@ impl EntryMetaData {
         Ok(html_flake::html_header(html_flake::HtmlHeaderArgs {
             title,
             taxon,
+            number,
             slug: &slug,
             ext,
             show_slug,

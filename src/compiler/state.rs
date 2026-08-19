@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    callback::{Callback, CallbackValue},
+    callback::{AmbiguousParent, Callback, CallbackValue},
     section::{
         HTMLContent, LazyContent, Section, SectionContent, SectionContents, UnresolvedSection,
     },
@@ -201,6 +201,12 @@ impl CompileState {
                         LazyContent::Query(spec) => {
                             children.push(SectionContent::Query(spec.clone()));
                         }
+                        // `split_heading_sections` consumes these while the note
+                        // is still being parsed. Reaching one here would mean a
+                        // section skipped that pass; drop it rather than panic,
+                        // so a cache written before it existed cannot crash a
+                        // build.
+                        LazyContent::Outdent => {}
                         LazyContent::Local(local_link) => {
                             let link_slug = subsection_slug(slug, &local_link.url);
 
@@ -334,6 +340,7 @@ impl CompileState {
     fn normalize_internal_anonymous_graph(&mut self) {
         let internal_slugs = self.collect_internal_anonymous_slugs();
         if internal_slugs.is_empty() {
+            self.report_ambiguous_parents(&HashMap::new());
             return;
         }
 
@@ -355,20 +362,61 @@ impl CompileState {
             })
             .collect();
 
+        // Where each internal section's edges should be re-attributed to. An
+        // edge recorded against a section that is about to be deleted has to be
+        // lifted to the nearest section that survives, not dropped: the note a
+        // reader sees is the one that did the linking, and to them the link was
+        // written by the page. Dropping instead would mean a `#local` after a
+        // heading silently produced no backlink at all.
+        let visible_hosts: HashMap<Slug, Option<Slug>> = internal_slugs
+            .iter()
+            .map(|&slug| {
+                (
+                    slug,
+                    Self::resolve_visible_parent(Some(slug), &self.callback.0, &internal_slugs),
+                )
+            })
+            .collect();
+
         for (&slug, value) in &mut self.callback.0 {
-            value
-                .backlinks
-                .retain(|backlink| !internal_slugs.contains(backlink));
+            value.backlinks = lift_edges(&value.backlinks, slug, &visible_hosts);
+            value.embedded_by = lift_edges(&value.embedded_by, slug, &visible_hosts);
             if let Some(&parent) = normalized_parents.get(&slug) {
                 value.parent = parent;
             }
         }
+
+        self.report_ambiguous_parents(&visible_hosts);
 
         self.callback
             .0
             .retain(|slug, _| !internal_slugs.contains(slug));
         self.compiled
             .retain(|slug, _| !internal_slugs.contains(slug));
+    }
+
+    /// Report sections embedded from two places, now that the hosts can be
+    /// named in slugs the author wrote.
+    ///
+    /// Two conditions are checked here rather than where the conflict was
+    /// noticed, and both need the normalized graph. A host that is not
+    /// published resolves to the section that is, so the warning names
+    /// something addressable — `"parent": "index/:options"` is not advice
+    /// anyone can take. And once both hosts have resolved they are often the
+    /// *same* section: a note embedded under two headings of one page has one
+    /// parent and no ambiguity, and warning about it would be noise on every
+    /// build.
+    fn report_ambiguous_parents(&mut self, visible_hosts: &HashMap<Slug, Option<Slug>>) {
+        let ambiguous = self.callback.take_ambiguous_parents();
+        for (child, kept, discarded) in reportable_ambiguities(ambiguous, visible_hosts) {
+            color_print::ceprintln!(
+                "<y>Warning: `{}` is embedded in both `{}` and `{}`; using `{}` as its parent.\n         Set `\"parent\"` in its metadata to choose deliberately.</>",
+                child,
+                kept,
+                discarded,
+                kept
+            );
+        }
     }
 
     fn collect_internal_anonymous_slugs(&self) -> HashSet<Slug> {
@@ -447,6 +495,57 @@ pub(super) fn nearest_directory_index(slug: Slug, exists: impl Fn(Slug) -> bool)
     }
 
     root
+}
+
+/// Which recorded ambiguities are worth telling the author about, expressed in
+/// the slugs they wrote.
+///
+/// Each host resolves through `visible_hosts` the way an edge does. Two that
+/// resolve to the same section were never ambiguous — a note embedded under two
+/// headings of one page has exactly one parent — and one that resolves to
+/// nothing has no host to name.
+fn reportable_ambiguities(
+    ambiguous: Vec<AmbiguousParent>,
+    visible_hosts: &HashMap<Slug, Option<Slug>>,
+) -> Vec<(Slug, Slug, Slug)> {
+    let visible = |slug: Slug| match visible_hosts.get(&slug) {
+        Some(host) => *host,
+        None => Some(slug),
+    };
+
+    ambiguous
+        .into_iter()
+        .filter_map(|entry| {
+            let kept = visible(entry.kept)?;
+            let discarded = visible(entry.discarded)?;
+            (kept != discarded).then_some((entry.child, kept, discarded))
+        })
+        .collect()
+}
+
+/// Re-attribute edges away from sections that are about to be deleted.
+///
+/// An edge naming an internal section becomes one naming the nearest section
+/// that survives publication. `visible_hosts` holds that mapping for every
+/// internal slug; anything absent from it is already visible and passes through.
+///
+/// Two things are dropped rather than lifted: an internal section with no
+/// visible host at all, and an edge that after lifting would point `owner` at
+/// itself — which is what a note linking to its own page from inside one of its
+/// headings would otherwise produce.
+fn lift_edges(
+    edges: &HashSet<Slug>,
+    owner: Slug,
+    visible_hosts: &HashMap<Slug, Option<Slug>>,
+) -> HashSet<Slug> {
+    edges
+        .iter()
+        .filter_map(|edge| match visible_hosts.get(edge) {
+            Some(host) => *host,
+            None => Some(*edge),
+        })
+        .filter(|edge| *edge != owner)
+        .collect()
 }
 
 /// Calculate the slug of a subsection referenced by the current file, from the `url` referencing
@@ -768,8 +867,12 @@ mod tests {
         assert!(!state.callback().0.contains_key(&Slug::new("anon")));
     }
 
+    /// A link written inside a section that is not published still happened, and
+    /// to a reader it was written by the page. It is re-attributed there rather
+    /// than discarded — which is what used to happen, so a `#local` inside an
+    /// anonymous subtree produced no backlink at all.
     #[test]
-    fn test_compile_filters_internal_anonymous_backlinks_from_targets() {
+    fn test_compile_lifts_internal_anonymous_backlinks_to_the_visible_host() {
         let mut shallows = HashMap::new();
         shallows.insert(
             Slug::new("index"),
@@ -801,10 +904,172 @@ mod tests {
         );
 
         let state = compile_all_without_missing_index_warning(&shallows).unwrap();
-        let maybe_target_callback = state.callback().0.get(&Slug::new("target"));
-        assert!(maybe_target_callback
-            .map(|value| value.backlinks.is_empty())
-            .unwrap_or(true));
+        let backlinks = &state
+            .callback()
+            .0
+            .get(&Slug::new("target"))
+            .expect("target should have a callback entry")
+            .backlinks;
+        assert_eq!(
+            backlinks,
+            &HashSet::from([Slug::new("index")]),
+            "the backlink should name the page, not the deleted anonymous section"
+        );
+    }
+
+    /// The same lifting for the embed edge. Without it every note embedded after
+    /// a heading loses its "Found in" entry, because the section that embedded
+    /// it is one the reader never sees.
+    #[test]
+    fn test_compile_lifts_internal_anonymous_embedded_by_to_the_visible_host() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("index"),
+            shallow_with_content(
+                "index",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/anon".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+
+        let mut anon = shallow_with_content(
+            "anon",
+            HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                url: "/target".to_string(),
+                title: None,
+                option: SectionOption::default(),
+            })]),
+        );
+        anon.metadata.0.insert(
+            KEY_INTERNAL_ANON_SUBTREE.to_string(),
+            HTMLContent::Plain("true".to_string()),
+        );
+        shallows.insert(Slug::new("anon"), anon);
+        shallows.insert(
+            Slug::new("target"),
+            shallow_with_content("target", HTMLContent::Plain("<p>target</p>".to_string())),
+        );
+
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+        let embedded_by = &state
+            .callback()
+            .0
+            .get(&Slug::new("target"))
+            .expect("target should have a callback entry")
+            .embedded_by;
+        assert_eq!(embedded_by, &HashSet::from([Slug::new("index")]));
+    }
+
+    /// Lifting can point an edge at the page it started from — a note linking to
+    /// itself from inside one of its own headings. A page is not its own
+    /// backlink, so that one is dropped rather than lifted.
+    #[test]
+    fn test_compile_drops_lifted_edges_that_point_at_their_own_page() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("index"),
+            shallow_with_content(
+                "index",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/anon".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+
+        let mut anon = shallow_with_content(
+            "anon",
+            HTMLContent::Lazy(vec![LazyContent::Local(LocalLink {
+                url: "/index".to_string(),
+                text: None,
+            })]),
+        );
+        anon.metadata.0.insert(
+            KEY_INTERNAL_ANON_SUBTREE.to_string(),
+            HTMLContent::Plain("true".to_string()),
+        );
+        shallows.insert(Slug::new("anon"), anon);
+
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+        let backlinks = state
+            .callback()
+            .0
+            .get(&Slug::new("index"))
+            .map(|value| value.backlinks.clone())
+            .unwrap_or_default();
+        assert!(
+            backlinks.is_empty(),
+            "index should not backlink to itself, got {:?}",
+            backlinks
+        );
+    }
+
+    fn ambiguity(child: &str, kept: &str, discarded: &str) -> AmbiguousParent {
+        AmbiguousParent {
+            child: Slug::new(child),
+            kept: Slug::new(kept),
+            discarded: Slug::new(discarded),
+        }
+    }
+
+    /// Two headings on one page are one parent. Reporting the raw hosts would
+    /// warn on every build about an ambiguity the reader cannot see and the
+    /// author cannot resolve — and would advise setting `parent` to a slug that
+    /// is not published.
+    #[test]
+    fn test_two_hosts_on_the_same_page_are_not_an_ambiguity() {
+        let visible_hosts = HashMap::from([
+            (Slug::new("page/:one"), Some(Slug::new("page"))),
+            (Slug::new("page/:two"), Some(Slug::new("page"))),
+        ]);
+        let reported = reportable_ambiguities(
+            vec![ambiguity("shared", "page/:one", "page/:two")],
+            &visible_hosts,
+        );
+        assert!(reported.is_empty(), "got {reported:?}");
+    }
+
+    /// A real ambiguity is still reported, in the slugs the author wrote rather
+    /// than the synthesised ones the headings carry.
+    #[test]
+    fn test_a_real_ambiguity_is_reported_with_visible_slugs() {
+        let visible_hosts = HashMap::from([
+            (Slug::new("a/:background"), Some(Slug::new("a"))),
+            (Slug::new("b/:background"), Some(Slug::new("b"))),
+        ]);
+        let reported = reportable_ambiguities(
+            vec![ambiguity("shared", "a/:background", "b/:background")],
+            &visible_hosts,
+        );
+        assert_eq!(
+            reported,
+            vec![(Slug::new("shared"), Slug::new("a"), Slug::new("b"))]
+        );
+    }
+
+    /// A host that resolves to nothing cannot be named, so there is no advice
+    /// to give.
+    #[test]
+    fn test_an_unresolvable_host_is_not_reported() {
+        let visible_hosts = HashMap::from([(Slug::new("gone/:one"), None)]);
+        let reported =
+            reportable_ambiguities(vec![ambiguity("shared", "gone/:one", "b")], &visible_hosts);
+        assert!(reported.is_empty(), "got {reported:?}");
+    }
+
+    /// Nothing is dropped when no heading is involved: hosts absent from the
+    /// map are already visible and pass straight through.
+    #[test]
+    fn test_hosts_that_are_already_visible_pass_through() {
+        let reported = reportable_ambiguities(vec![ambiguity("shared", "a", "b")], &HashMap::new());
+        assert_eq!(
+            reported,
+            vec![(Slug::new("shared"), Slug::new("a"), Slug::new("b"))]
+        );
     }
 
     #[test]

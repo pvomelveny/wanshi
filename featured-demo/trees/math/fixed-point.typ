@@ -8,6 +8,7 @@
   "taxon": "theorem",
   "date": "2026-08-09",
   "status": "stable",
+  "numbering": "true",
 ))
 
 A worked note: real mathematics, written the way any Typst document would be,
@@ -18,7 +19,7 @@ shared counter across statement types — so the theorem is 2 because the
 definition took 1. The proof is left unnumbered, as proofs conventionally are.
 How that works, and when it is a bad idea, is at the bottom of this page.
 
-#definition(slug: "contraction", title: "Contraction", numbering: true)[
+#definition(slug: "contraction", title: "Contraction")[
   Let $(X, d)$ be a metric space. A map $T colon X -> X$ is a *contraction* if
   there is some $q < 1$ with
 
@@ -27,13 +28,13 @@ How that works, and when it is a bad idea, is at the bottom of this page.
   The smallest such $q$ is the *Lipschitz constant* of $T$.
 ]
 
-#theorem(title: "Banach, 1922", numbering: true)[
+#theorem(title: "Banach, 1922")[
   Every contraction on a non-empty complete metric space has exactly one fixed
   point $x^*$, and for any starting $x_0$ the sequence $x_(n+1) = T(x_n)$
   converges to it.
 ]
 
-#proof[
+#proof(numbering: false)[
   Iterating the contraction bound gives $d(x_(n+1), x_n) <= q^n d(x_1, x_0)$, so
   for $m > n$
 
@@ -45,7 +46,7 @@ How that works, and when it is a bad idea, is at the bottom of this page.
   which forces $d(x^*, y^*) = 0$.
 ]
 
-#remark(title: "Why completeness is not optional", numbering: true)[
+#remark(title: "Why completeness is not optional")[
   On $X = (0, 1]$ with the usual metric, $T(x) = x/2$ is a contraction with no
   fixed point in $X$. The iterates converge, but to a point that was removed
   from the space.
@@ -109,31 +110,76 @@ arrive as black-on-white rectangles pasted onto a parchment background.
 
 = Numbering
 
-Every subtree and embed takes `numbering`, off by default. Turning it on
-prefixes the *taxon* with a counter, which is what produces `Definition 1.` and
-`Theorem 2.` above:
+Numbering is decided once, by the note:
 
 ```typst
-#definition(title: "Contraction", numbering: true)[ ... ]
-#theorem(title: "Banach, 1922", numbering: true)[ ... ]
-#proof[ ... ]
+#metadata((
+  "title": "The Banach fixed-point theorem",
+  "numbering": "true",
+))
 ```
 
-Two details of how the counter behaves:
+Everything on the page follows from that — the statements above, and the
+headings you have been reading. A site can set `[build].numbering` instead and
+have every note start numbered; a note's own key overrides it either way.
+
+Where the number lands depends on whether there is a word for it to attach to. A
+block with a taxon reads `Definition 1.`, the digits inside the label, the way a
+statement is written on paper. A heading has no taxon, so its number goes in
+front of the title — `3. Numbering`, above. Both are the ordinary convention for
+what they label.
+
+An individual block overrides the note with `numbering:`, which is how the proof
+below the theorem stays out of the sequence:
+
+```typst
+#proof(numbering: false)[ ... ]
+```
+
+Three details of how the counter behaves:
 
 #subtree(title: "One counter, shared by every taxon", taxon: "observation")[
   The theorem above is numbered 2, not 1, because the definition took 1. There
-  is no separate counter per statement type. That matches the common convention
-  of a single shared counter, and it is the reason a numbered remark can appear
-  as `Remark 3.`
+  is no separate counter per statement type: definitions, theorems and remarks
+  share one sequence, which is why a numbered remark can appear as `Remark 3.`
 
-  Leaving `numbering` off, as the proof does, takes a block out of the sequence
-  entirely rather than giving it a number nobody cites.
+  Headings count separately. This section is 3 because two headings preceded it,
+  not 6 — the three statements above are in their own sequence and do not push
+  it along.
+
+  Opting a block out, as the proof does, takes it out of the sequence entirely
+  rather than giving it a number nobody cites.
 ]
 
 #subtree(title: "Nesting adds a level", taxon: "observation")[
-  A numbered subtree inside a numbered subtree counts as `1.1`, `1.2`, and so
-  on, so a definition with numbered sub-remarks reads the way it would on paper.
+  Statements are numbered inside the section that holds them, so the
+  observations here start again at `3.1` rather than continuing the `1, 2, 3`
+  of the statements above. Nesting deepens it again: an observation inside `3.2`
+  reads `3.2.1`.
+
+  The three statements at the top of this page carry no section number because
+  no heading had opened yet. Write one after a heading — `#outdent()` gets you
+  back out — and it picks the top-level sequence up where it left off rather
+  than restarting.
+]
+
+#subtree(title: "A number can name two things", taxon: "observation")[
+  Look down this page: `3.1` names both *One counter, shared by every taxon* at
+  the top of this section and the subsection *Why the rest of this forest does
+  not use it* below it. Statements and subsections are separate sequences
+  hanging off the same section number, so they collide by construction.
+
+  That is what a paper does too — `Theorem 3.1` and `Section 3.1` coexist
+  everywhere — and the label is what resolves it. Say "Observation 3.1" or
+  "Section 3.1" and there is no ambiguity; say "3.1" alone and there is.
+]
+
+#subtree(title: "The page itself is not numbered", taxon: "observation")[
+  The title at the top of this page reads `Theorem.`, with no number, while the
+  statements under it are 1, 2 and 3. A page is the only thing at its level, so
+  a number there would distinguish it from nothing — and taking one would push
+  every number below it a level deeper, turning `Definition 1.` into
+  `Definition 1.1.`
 ]
 
 == Why the rest of this forest does not use it

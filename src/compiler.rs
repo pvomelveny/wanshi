@@ -7,6 +7,7 @@ mod artifacts;
 pub mod callback;
 pub mod counter;
 pub mod custom_tag;
+mod heading_sections;
 mod incremental;
 mod output_manifest;
 mod query;

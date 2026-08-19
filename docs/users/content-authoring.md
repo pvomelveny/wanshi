@@ -80,17 +80,53 @@ available.
 
 ## Headings and the Document Outline
 
-Typst headings work normally inside a note — `=`, `==`, and so on. wanshi does not
-turn them into sections: they get no slug, no page, and no table-of-contents row.
-They are typography and document structure, not identity.
+A Typst heading opens a section. Everything after `= Background` belongs to it —
+prose, embeds, subtrees, listings — until a heading at the same or a shallower
+level ends it. So this:
 
-What wanshi does control is the **level** each heading is emitted at. A section's
-title is `h{depth}`, where depth is its nesting on the page being rendered: the
-page's own note is `h1`, a note embedded in it is `h2`, one embedded inside that
-is `h3`. Typst's own headings inside a section are pushed down by the same amount,
-so they stay below the section that contains them.
+```typst
+= Background
+Some prose.
+#embed("/note-a", "A note")
 
-The result is one `h1` per page and an outline that matches what a reader sees.
+= Method
+#embed("/note-b", "Another")
+```
+
+renders `note-a` inside Background and `note-b` inside Method, and the table of
+contents indents them to match. Headings get a row in the outline and a `[#]`
+anchor of their own, named after their text.
+
+A heading is still not an identity: it has no slug you can link to from another
+note, does not appear in listings, and never becomes anything's parent. `note-a`
+above still reports the page as its parent and still shows the page — not
+Background — under **Found in**. When you want a heading that *is* addressable,
+use `#subtree(slug: "...")`; see [Subtrees](#subtrees).
+
+### Getting back out
+
+Another heading is the usual way out, and covers most cases: a second `=` ends
+the first. When you want out without writing one — a closing embed that belongs
+to the note as a whole, say — use `#outdent()`:
+
+```typst
+= Background
+#embed("/note-a", "A note")     // inside Background
+
+#outdent()
+#embed("/note-c", "Afterword")  // back at the top level of the note
+```
+
+Each call steps out one level, so two calls escape two headings. Calling it with
+no heading open does nothing, which means moving a heading around can never turn
+a working note into a failing build.
+
+### Levels
+
+A section's title is `h{depth}`, where depth is its nesting on the page being
+rendered: the page's own note is `h1`, a heading or an embed inside it is `h2`,
+something inside that is `h3`. One `h1` per page, and an outline that matches
+what a reader sees.
 
 Two consequences worth knowing:
 
@@ -98,13 +134,72 @@ Two consequences worth knowing:
   `h1` on its own page and `h3` when embedded two levels deep. That is correct —
   an outline describes a page, not a note — but it means you cannot rely on a
   fixed level.
-- **Start a note's headings at `=`, not `==`.** Typst maps `=` to `h2`, directly
-  below a note's `h1` title. Starting at `==` skips a level, which strict
-  accessibility checkers flag.
+- **Skipping a level does not skip a number.** Writing `===` directly under a `=`
+  nests it one level, so it is emitted as `h3`, not `h4`. Levels are read as an
+  ordering, not as absolute depths, which is why the output never has the gaps
+  strict accessibility checkers flag.
 
 Nesting deeper than six levels clamps at `h6`, which is the deepest heading HTML
 defines. Typst's `======` is not emitted as a heading element at all — it becomes
-a `<div role="heading">` — so it is left alone.
+a `<div role="heading">` — so it opens no section and is left in the prose.
+
+## Numbering
+
+A note decides once whether its sections are numbered:
+
+```typst
+#metadata((
+  "title": "The Banach fixed-point theorem",
+  "numbering": "true",
+))
+```
+
+Everything on the page follows: headings, embeds and subtrees alike. A site can
+set `[build].numbering` to start every note numbered, and any note overrides it.
+
+Where the number lands depends on whether there is a word for it to attach to. A
+block with a taxon reads `Definition 1.`, the digits inside the label; a heading
+has no taxon, so its number goes in front of the title — `2. Background`. Both
+are the ordinary convention for the thing being labelled.
+
+Two sequences, not one. Headings count `1, 2, 3` as the page's outline;
+taxon'd blocks count separately, so the first heading is 1 even when three
+definitions precede it.
+
+A statement is numbered **inside the section holding it** — an observation in
+section 3 is `Observation 3.1.` — which is the convention a paper uses. A
+statement written before any heading has no section to sit in, so it takes a
+bare number; if you return to the top level later (see [`outdent`](#outdent)),
+that sequence picks up where it left off rather than restarting.
+
+A consequence worth knowing: within one section, a subsection and a statement
+can both be `3.1`. That is what LaTeX does, and the taxon word is what resolves
+it — "Observation 3.1" and "Section 3.1" are unambiguous, "3.1" alone is not.
+
+A section with no taxon counts in the **outline** sequence, because that is
+already how it renders: no taxon means the number leads the title, like a
+heading. So embedding a note that has no taxon of its own makes it a numbered
+section of the page it lands in.
+
+The page's own title never takes a number. It is the only thing at its level, so
+a number would distinguish it from nothing, and taking one would push every
+number below it a level deeper.
+
+An individual block overrides the note:
+
+```typst
+#proof(numbering: false)[ ... ]        // stays out of the sequence
+#embed("/note", "A note", numbering: true)   // numbered on an unnumbered page
+```
+
+Opting a block out covers what is inside it too, and takes it out of the
+sequence rather than giving it a number nobody cites.
+
+**A number describes a position on a page, not a note.** The same note embedded
+in two pages takes a different number in each, and an embedded note's own
+`numbering` metadata is ignored — the page it appears in decides. That is why a
+number is not a durable way to refer to anything; `#local()` is, and renders the
+target's own title. Numbers for reading, slugs for referring.
 
 ## Metadata Reference
 
@@ -116,6 +211,7 @@ a `<div role="heading">` — so it is left alone.
 | `page-title` | string | Plain-text browser title override. Defaults to `title` with markup stripped. |
 | `taxon` | string | Display category — `definition`, `remark`, `theorem`, `reference`, … Rendered as a label before the title. |
 | `data-taxon` | string | Plain taxonomy attribute. Auto-derived from `taxon`; override only if you need the attribute to differ from the label. |
+| `numbering` | bool | Whether this page's sections carry numbers. Falls back to `[build].numbering`. Read from the page being rendered, so an embedded note follows the page it appears in rather than its own file. See [Numbering](#numbering). |
 | `date` | string | Conventional, but privileged: it gets its own column in page headers and catalog entries, and is the natural `footer-sort-by` key. |
 
 ### Graph and Navigation
@@ -171,7 +267,7 @@ Everything below comes from `trees/_lib/wanshi.typ`, imported with
 
 ```typst
 #local(slug, text: none)
-#embed(url, title, numbering: false, open: true, catalog: true, display-options: false)
+#embed(url, title, numbering: auto, open: true, catalog: true, display-options: false)
 #external(dest, content)
 ```
 
@@ -202,13 +298,25 @@ Parameters:
 | `slug` | `none` | Explicit slug, resolved relative to the containing **directory**. Omit for an anonymous subtree. |
 | `title` | `none` | Title for the generated section. |
 | `taxon` | `none` | Taxon for the generated section. |
-| `numbering` | `false` | Number the section. |
+| `numbering` | `auto` | Number the section. `auto` follows the note; `true` or `false` overrides it for this block alone. |
 | `open` | `true` | Whether the `<details>` starts expanded. |
 | `catalog` | `true` | Include in the table of contents. |
 
 Anonymous subtrees (no `slug:`) get an internal identifier, are never linkable,
 and are stripped from `wanshi.json`, `wanshi.graph.json`, and the
-reference/backlink graph.
+reference/backlink graph. A heading opens a section of exactly this kind, which
+is why one can hold embeds without ever becoming their parent.
+
+Being stripped is about identity, not about the edges written inside. A `#local`
+in an anonymous subtree still registers its backlink, recorded against the
+nearest enclosing section that *is* published — so the note the reader sees as
+having made the link is the one credited with it.
+
+#### `outdent`
+
+`#outdent()` closes the innermost open heading section. It takes no arguments,
+draws nothing, and does nothing when no heading is open. See
+[Getting back out](#getting-back-out).
 
 #### Semantic Helpers
 

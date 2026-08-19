@@ -67,6 +67,7 @@ footer-sort-by = "slug"
 inline-css = false
 inline-script = false
 asref = false
+numbering = false
 output = "./publish"
 search = true
 search-content = true
@@ -82,6 +83,7 @@ header-keys = ["date", "author", "see-also"]
 - `inline-css`: embeds wanshi's CSS into each page instead of writing `main.css`.
 - `inline-script`: embeds wanshi's JavaScript into each page instead of writing `main.js`.
 - `asref`: global default for whether local link targets are treated as references. Individual sections override it with `asref` metadata, and a `reference` taxon makes a section a reference target regardless of this setting.
+- `numbering`: global default for whether sections carry numbers. A note overrides it with `numbering` metadata, and a single block with `numbering:` on its `#embed` or `#subtree`. See [Numbering](content-authoring.md#numbering).
 - `output`: publish output directory used by `wanshi build`.
 - `edit`: optional edit URL prefix for generated edit links in publish builds. Unset by default, in which case no edit link is rendered.
 - `search`: emit `wanshi.search.json` and show the sidebar search box. Set to `false` to remove both.

@@ -6,7 +6,7 @@ use eyre::eyre;
 use std::{collections::HashSet, ops::Not};
 
 use crate::{
-    compiler::counter::Counter,
+    compiler::counter::{Counter, NumberKind},
     config::build::FooterMode,
     entry::{MetaData, KEY_INTERNAL_ANON_SUBTREE},
     environment::{self, verify_update_hash},
@@ -84,6 +84,16 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
     out
 }
 
+/// What a section's title carries, and where numbering has got to inside it.
+///
+/// `taxon` and `number` are never both set: a section with a taxon shows its
+/// number in the pill, one without shows a bare number in front of the title.
+struct Label {
+    taxon: String,
+    number: String,
+    children: Counter,
+}
+
 pub struct Writer {}
 
 impl Writer {
@@ -136,18 +146,47 @@ impl Writer {
         Ok(())
     }
 
+    /// Whether this page numbers its sections.
+    ///
+    /// Read from the page being rendered, never from an embedded note: a number
+    /// is a position in one page's sequence, and the same note holds different
+    /// positions on different pages. A note's own `numbering` therefore governs
+    /// its own page and is ignored wherever it is embedded.
+    fn page_numbering(section: &Section) -> eyre::Result<bool> {
+        Ok(section
+            .metadata
+            .numbering()?
+            .unwrap_or_else(environment::numbering))
+    }
+
     pub fn rss_content_html(section: &Section, state: &CompileState) -> eyre::Result<String> {
         let mut counter = Counter::init();
-        let (article_inner, _catalog_item) =
-            Writer::section_to_html(section, &mut counter, true, false, state, PAGE_LEVEL)?;
+        let numbering = Writer::page_numbering(section)?;
+        let (article_inner, _catalog_item) = Writer::section_to_html(
+            section,
+            &mut counter,
+            true,
+            false,
+            state,
+            PAGE_LEVEL,
+            numbering,
+        )?;
         Ok(article_inner)
     }
 
     pub fn html_doc(section: &Section, state: &CompileState) -> eyre::Result<(String, String)> {
         let mut counter = Counter::init();
+        let numbering = Writer::page_numbering(section)?;
 
-        let (article_inner, items) =
-            Writer::section_to_html(section, &mut counter, true, false, state, PAGE_LEVEL)?;
+        let (article_inner, items) = Writer::section_to_html(
+            section,
+            &mut counter,
+            true,
+            false,
+            state,
+            PAGE_LEVEL,
+            numbering,
+        )?;
         let catalog_html = if items.is_empty().not() {
             html_flake::html_catalog_block(&items)
         } else {
@@ -350,6 +389,7 @@ impl Writer {
     fn catalog_item(
         section: &Section,
         taxon: &str,
+        number: &str,
         child_html: &str,
         depth: u8,
     ) -> eyre::Result<String> {
@@ -363,6 +403,7 @@ impl Writer {
             page_title,
             details_open: section.option.details_open,
             taxon,
+            number,
             child_html,
             use_hash_href,
             level: depth.saturating_sub(PAGE_LEVEL),
@@ -392,7 +433,10 @@ impl Writer {
 
         match footer_mode {
             FooterMode::Link => {
-                let summary = section.metadata.to_header(None, None, false, level)?;
+                // No number: a footer entry points at another note, and a
+                // number here would claim a place in this page's sequence that
+                // the entry does not hold.
+                let summary = section.metadata.to_header(None, None, "", false, level)?;
                 let data_taxon = section.metadata.data_taxon().map_or("", |s| s);
                 Ok(format!(
                     r#"<section class="block" data-taxon="{data_taxon}" style="margin-bottom: 0.4em;">{summary}</section>"#
@@ -410,15 +454,16 @@ impl Writer {
                 // A footer entry is a pointer to another note. Its author,
                 // status and the rest belong on that note's own page, not
                 // repeated unlabelled under every page that links to it.
-                html_flake::html_article_inner(
-                    &section.metadata,
-                    &contents,
-                    true,
-                    false,
-                    None,
-                    None,
+                html_flake::html_article_inner(html_flake::ArticleInnerArgs {
+                    metadata: &section.metadata,
+                    contents: &contents,
+                    hide_metadata: true,
+                    open: false,
+                    adhoc_title: None,
+                    adhoc_taxon: None,
+                    number: "",
                     level,
-                )
+                })
             }
         }
     }
@@ -430,20 +475,37 @@ impl Writer {
         hide_metadata: bool,
         state: &CompileState,
         depth: u8,
+        inherited_numbering: bool,
     ) -> eyre::Result<(String, String)> {
-        let adhoc_taxon = Writer::taxon(section, counter);
+        // A block overrides the page only by saying so. The resolved value is
+        // what children inherit, not the page's, so `numbering: false` on
+        // something that contains other blocks covers all of them — and an
+        // explicit `true` further in turns numbering back on.
+        let numbering = section.option.numbering.unwrap_or(inherited_numbering);
+        // The page's own title takes no number even on a numbered page. It is
+        // the only thing at its level, so a number distinguishes it from
+        // nothing — and taking one would push every number on the page a level
+        // deeper, turning `Definition 1.` into `Definition 1.1.`
+        let numbered_here = numbering && !toplevel;
+        let Label {
+            taxon: adhoc_taxon,
+            number: adhoc_number,
+            children: mut subcounter,
+        } = Writer::label(section, counter, numbered_here);
         let (mut contents, mut items) = (String::new(), String::new());
 
         if !section.children.is_empty() {
-            let mut subcounter = match section.option.numbering {
-                true => counter.left_shift(),
-                false => counter.clone(),
-            };
             let is_collection = section.metadata.is_collect()?;
 
             for child in &section.children {
-                let (content_html, item_html) =
-                    Writer::content_to_html(child, &mut subcounter, !is_collection, state, depth)?;
+                let (content_html, item_html) = Writer::content_to_html(
+                    child,
+                    &mut subcounter,
+                    !is_collection,
+                    state,
+                    depth,
+                    numbering,
+                )?;
                 contents.push_str(&content_html);
                 items.push_str(&item_html);
             }
@@ -478,20 +540,23 @@ impl Writer {
             section
                 .option
                 .catalog
-                .then(|| Writer::catalog_item(section, &adhoc_taxon, &child_html, depth))
+                .then(|| {
+                    Writer::catalog_item(section, &adhoc_taxon, &adhoc_number, &child_html, depth)
+                })
                 .transpose()?
                 .unwrap_or(String::new())
         };
 
-        let article_inner = html_flake::html_article_inner(
-            &section.metadata,
-            &contents,
+        let article_inner = html_flake::html_article_inner(html_flake::ArticleInnerArgs {
+            metadata: &section.metadata,
+            contents: &contents,
             hide_metadata,
-            section.option.details_open,
-            None,
-            Some(adhoc_taxon.as_str()),
-            depth,
-        )?;
+            open: section.option.details_open,
+            adhoc_title: None,
+            adhoc_taxon: Some(adhoc_taxon.as_str()),
+            number: &adhoc_number,
+            level: depth,
+        })?;
 
         Ok((article_inner, catalog_item))
     }
@@ -502,6 +567,7 @@ impl Writer {
         hide_metadata: bool,
         state: &CompileState,
         depth: u8,
+        inherited_numbering: bool,
     ) -> eyre::Result<(String, String)> {
         match content {
             // Typst numbers its own headings from a note's own top level, so a
@@ -509,9 +575,15 @@ impl Writer {
             // around it. Shifting by the containing depth slots them in below
             // their section instead of alongside it.
             SectionContent::Plain(s) => Ok((shift_heading_levels(s, depth), String::new())),
-            SectionContent::Embed(section) => {
-                Writer::section_to_html(section, counter, false, hide_metadata, state, depth + 1)
-            }
+            SectionContent::Embed(section) => Writer::section_to_html(
+                section,
+                counter,
+                false,
+                hide_metadata,
+                state,
+                depth + 1,
+                inherited_numbering,
+            ),
             // Listings are substituted for plain HTML before writing begins;
             // reaching one here means the resolve pass was skipped.
             SectionContent::Query(spec) => {
@@ -524,21 +596,56 @@ impl Writer {
         }
     }
 
-    /// Render-time formatting of a section's taxon.
+    /// The two labels a section title can carry: its taxon, and its number.
     ///
     /// The metadata holds the taxon exactly as authored; capitalisation and the
     /// trailing ". " separator are applied here, at the point of display.
-    fn taxon(section: &Section, counter: &mut Counter) -> String {
+    ///
+    /// Only one of them ever holds the number. A taxon'd block reads
+    /// `Definition 1.1.`, with the digits inside the pill, the way a statement
+    /// is written on paper; a section with no taxon — a Typst heading, above all
+    /// — puts a bare number in front of its title, the way a section is. Both
+    /// spellings are conventional, and which one applies is decided by whether
+    /// there is a word for the number to attach to.
+    ///
+    /// The same answer decides which sequence the section counts in, so the
+    /// number it shows and the sequence it belongs to cannot disagree. An
+    /// unnumbered section takes nothing from either sequence and passes both on
+    /// untouched, which is what leaves it transparent to what it contains.
+    fn label(section: &Section, counter: &mut Counter, numbering: bool) -> Label {
         let text = section.metadata.taxon().map_or("", |s| s);
+        if !numbering {
+            return Label {
+                taxon: display_taxon(text),
+                number: String::new(),
+                children: counter.passthrough(),
+            };
+        }
+
+        // The taxon decides both which sequence the section counts in and where
+        // its number is rendered, so the two can never disagree: a section with
+        // no taxon is part of the outline and shows a leading number, one with a
+        // taxon is a statement and shows its number inside the pill.
+        let kind = if text.is_empty() {
+            NumberKind::Outline
+        } else {
+            NumberKind::Statement
+        };
+        let (number, children) = counter.take(kind);
+
         if text.is_empty() {
-            return String::new();
+            Label {
+                taxon: String::new(),
+                number,
+                children,
+            }
+        } else {
+            Label {
+                taxon: Taxon::new(Some(number), text.to_string()).display(),
+                number: String::new(),
+                children,
+            }
         }
-        if section.option.numbering {
-            counter.step_mut();
-            let numbering = Some(counter.display());
-            return Taxon::new(numbering, text.to_string()).display();
-        }
-        display_taxon(text)
     }
 
     fn is_internal_anonymous_subtree(section: &Section) -> eyre::Result<bool> {
@@ -555,12 +662,14 @@ mod tests {
 
     use crate::{
         compiler::{
-            section::{EmbedContent, HTMLContent, LazyContent, SectionOption, UnresolvedSection},
+            section::{
+                EmbedContent, HTMLContent, LazyContent, LocalLink, SectionOption, UnresolvedSection,
+            },
             state::compile_all,
         },
         entry::{
-            HTMLMetaData, KEY_EXT, KEY_INTERNAL_ANON_SUBTREE, KEY_PAGE_TITLE, KEY_REFERENCES,
-            KEY_SLUG, KEY_TITLE,
+            HTMLMetaData, KEY_EXT, KEY_INTERNAL_ANON_SUBTREE, KEY_NUMBERING, KEY_PAGE_TITLE,
+            KEY_REFERENCES, KEY_SLUG, KEY_TAXON, KEY_TITLE,
         },
         ordered_map::OrderedMap,
     };
@@ -801,6 +910,269 @@ mod tests {
             assert_eq!(bullet_of("outer"), "\u{25A0}");
             assert_eq!(bullet_of("middle"), "\u{25C6}");
             assert_eq!(bullet_of("inner"), "\u{25B8}");
+        });
+    }
+
+    // --- numbering ---------------------------------------------------------
+
+    /// Build `index`, embedding each child in order. `page` and each child may
+    /// carry extra metadata, and each embed may override numbering.
+    /// A child of the test page: slug, extra metadata, and its embed's override.
+    type NumberingChild<'a> = (&'a str, &'a [(&'a str, &'a str)], Option<bool>);
+
+    fn numbering_doc(page_meta: &[(&str, &str)], children: &[NumberingChild<'_>]) -> String {
+        let mut shallows = HashMap::new();
+        let embeds: Vec<LazyContent> = children
+            .iter()
+            .map(|(slug, _, numbering)| {
+                LazyContent::Embed(EmbedContent {
+                    url: format!("/{slug}"),
+                    title: None,
+                    option: SectionOption::new(*numbering, true, true),
+                })
+            })
+            .collect();
+
+        let mut page = shallow_section_with_content("index", "Root", HTMLContent::Lazy(embeds));
+        for (k, v) in page_meta {
+            page.metadata
+                .0
+                .insert(k.to_string(), HTMLContent::Plain(v.to_string()));
+        }
+        shallows.insert(Slug::new("index"), page);
+
+        for (slug, meta, _) in children {
+            let mut child = shallow_section(slug, slug);
+            for (k, v) in *meta {
+                child
+                    .metadata
+                    .0
+                    .insert(k.to_string(), HTMLContent::Plain(v.to_string()));
+            }
+            shallows.insert(Slug::new(*slug), child);
+        }
+
+        let state = compile_all(&shallows).unwrap();
+        let root = state.compiled().get(&Slug::new("index")).unwrap();
+        Writer::html_doc(root, &state).unwrap().0
+    }
+
+    /// Every rendered label, in order: the taxon pill or the bare number.
+    fn labels(html: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cursor = 0;
+        while let Some(i) = html[cursor..].find("class=\"section-title\"") {
+            let start = cursor + i;
+            let end = html[start..]
+                .find("</h")
+                .map(|e| start + e)
+                .unwrap_or(html.len());
+            let title = &html[start..end];
+            let mut label = String::new();
+            for class in ["section-number", "taxon"] {
+                let open = format!("<span class=\"{class}\">");
+                if let Some(o) = title.find(&open) {
+                    let text_start = o + open.len();
+                    if let Some(c) = title[text_start..].find("</span>") {
+                        label.push_str(&title[text_start..text_start + c]);
+                    }
+                }
+            }
+            out.push(label);
+            cursor = end;
+        }
+        out
+    }
+
+    #[test]
+    fn test_numbering_is_off_without_metadata_or_config() {
+        with_test_env(|| {
+            let html = numbering_doc(&[], &[("a", &[(KEY_TAXON, "definition")], None)]);
+            assert_eq!(labels(&html), vec!["", "Definition."]);
+        });
+    }
+
+    #[test]
+    fn test_note_metadata_turns_numbering_on_for_everything_inside() {
+        with_test_env(|| {
+            let html = numbering_doc(
+                &[(KEY_NUMBERING, "true")],
+                &[
+                    ("a", &[(KEY_TAXON, "definition")], None),
+                    ("b", &[(KEY_TAXON, "theorem")], None),
+                ],
+            );
+            assert_eq!(labels(&html), vec!["", "Definition 1.", "Theorem 2."]);
+        });
+    }
+
+    /// The case that is impossible without this change: a section with no taxon
+    /// has nowhere to put a number, so it never got one.
+    #[test]
+    fn test_a_section_with_no_taxon_takes_a_bare_number() {
+        with_test_env(|| {
+            let html = numbering_doc(&[(KEY_NUMBERING, "true")], &[("a", &[], None)]);
+            assert_eq!(labels(&html), vec!["", "1."]);
+        });
+    }
+
+    /// The page is the only thing at its level, so a number there says nothing —
+    /// and taking one would push everything else a level deeper.
+    #[test]
+    fn test_the_page_title_is_never_numbered() {
+        with_test_env(|| {
+            let html = numbering_doc(
+                &[(KEY_NUMBERING, "true"), (KEY_TAXON, "theorem")],
+                &[("a", &[(KEY_TAXON, "definition")], None)],
+            );
+            assert_eq!(labels(&html), vec!["Theorem.", "Definition 1."]);
+        });
+    }
+
+    #[test]
+    fn test_an_embed_can_opt_out_of_a_numbered_page() {
+        with_test_env(|| {
+            let html = numbering_doc(
+                &[(KEY_NUMBERING, "true")],
+                &[
+                    ("a", &[(KEY_TAXON, "definition")], None),
+                    ("b", &[(KEY_TAXON, "proof")], Some(false)),
+                    ("c", &[(KEY_TAXON, "remark")], None),
+                ],
+            );
+            assert_eq!(
+                labels(&html),
+                vec!["", "Definition 1.", "Proof.", "Remark 2."],
+                "an opted-out block takes no number and no place in the sequence"
+            );
+        });
+    }
+
+    #[test]
+    fn test_an_embed_can_opt_in_on_an_unnumbered_page() {
+        with_test_env(|| {
+            let html = numbering_doc(
+                &[],
+                &[
+                    ("a", &[(KEY_TAXON, "definition")], Some(true)),
+                    ("b", &[(KEY_TAXON, "remark")], None),
+                ],
+            );
+            assert_eq!(labels(&html), vec!["", "Definition 1.", "Remark."]);
+        });
+    }
+
+    /// A number describes a position on a page. An embedded note holds a
+    /// different position on every page that embeds it, so its own metadata
+    /// cannot be what decides.
+    #[test]
+    fn test_an_embedded_notes_own_numbering_metadata_is_ignored() {
+        with_test_env(|| {
+            let html = numbering_doc(
+                &[],
+                &[(
+                    "a",
+                    &[(KEY_TAXON, "definition"), (KEY_NUMBERING, "true")],
+                    None,
+                )],
+            );
+            assert_eq!(labels(&html), vec!["", "Definition."]);
+        });
+    }
+
+    /// The two sequences at render level, and the case that prompted separating
+    /// them: a heading is 1 even after statements, and a statement written once
+    /// the heading has closed picks the top-level sequence back up.
+    #[test]
+    fn test_headings_and_statements_count_separately_across_the_page() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let embed = |url: &str| {
+                LazyContent::Embed(EmbedContent {
+                    url: url.to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })
+            };
+
+            let mut page = shallow_section_with_content(
+                "index",
+                "Root",
+                HTMLContent::Lazy(vec![embed("/first"), embed("/section"), embed("/after")]),
+            );
+            page.metadata.0.insert(
+                KEY_NUMBERING.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
+            shallows.insert(Slug::new("index"), page);
+
+            for (slug, taxon) in [
+                ("first", "definition"),
+                ("inside", "remark"),
+                ("after", "definition"),
+            ] {
+                let mut section = shallow_section(slug, slug);
+                section
+                    .metadata
+                    .0
+                    .insert(KEY_TAXON.to_string(), HTMLContent::Plain(taxon.to_string()));
+                shallows.insert(Slug::new(slug), section);
+            }
+
+            // No taxon, so this counts in the outline and holds a statement.
+            shallows.insert(
+                Slug::new("section"),
+                shallow_section_with_content(
+                    "section",
+                    "A section",
+                    HTMLContent::Lazy(vec![embed("/inside")]),
+                ),
+            );
+
+            let state = compile_all(&shallows).unwrap();
+            let root = state.compiled().get(&Slug::new("index")).unwrap();
+            let html = Writer::html_doc(root, &state).unwrap().0;
+
+            assert_eq!(
+                labels(&html),
+                vec![
+                    "",              // the page itself
+                    "Definition 1.", // a statement, before any section
+                    "1.",            // the first section, despite following a statement
+                    "Remark 1.1.",   // numbered inside that section
+                    "Definition 2.", // back at top level, continuing 1
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn test_footer_entries_are_never_numbered() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let mut page = shallow_section_with_content(
+                "index",
+                "Root",
+                HTMLContent::Lazy(vec![LazyContent::Local(LocalLink {
+                    url: "/target".to_string(),
+                    text: None,
+                })]),
+            );
+            page.metadata.0.insert(
+                KEY_NUMBERING.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
+            shallows.insert(Slug::new("index"), page);
+            shallows.insert(Slug::new("target"), shallow_section("target", "Target"));
+
+            let state = compile_all(&shallows).unwrap();
+            let target = state.compiled().get(&Slug::new("target")).unwrap();
+            let html = Writer::html_doc(target, &state).unwrap().0;
+            let footer = &html[html.rfind("<footer").unwrap_or(0)..];
+            assert!(
+                !footer.contains(r#"<span class="section-number">1."#),
+                "a backlink entry must not claim a place in this page's sequence"
+            );
         });
     }
 

@@ -222,7 +222,10 @@
   include-indexes: include-indexes,
 )
 
-#let embed(url, title, numbering: false, open: true, catalog: true, display-options: false) = {
+// `numbering: auto` defers to the note, which decides once in its metadata (or
+// site-wide via `[build].numbering`). Pass `true` or `false` to override that
+// for this block alone.
+#let embed(url, title, numbering: auto, open: true, catalog: true, display-options: false) = {
   with-target-check((export-target) => {
     if export-target == "html" {
       let v = title
@@ -247,7 +250,7 @@
   slug: none, // default: anonymous subtree
   title: none,
   taxon: none,
-  numbering: false,
+  numbering: auto,
   open: true,
   catalog: true,
   content,
@@ -270,8 +273,24 @@
   }
 })
 
+// Close the innermost open heading section.
+//
+// A heading opens a section that everything after it belongs to, and the usual
+// way out is another heading at the same level. This is for when you want out
+// without writing one — an embed that belongs to the note as a whole after the
+// headings have started, say. Each call steps out one level; calling it with no
+// heading open does nothing.
+//
+// Nothing is drawn, in either target: it is a statement about structure, and
+// paged output has no wanshi sections to structure.
+#let outdent() = with-target-check((export-target) => {
+  if export-target == "html" {
+    html.elem("wanshi-outdent", "")
+  }
+})
+
 // Semantic subtree sugar helpers for common note taxons.
-#let exegesis(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let exegesis(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "exegesis" } else { taxon },
@@ -281,7 +300,7 @@
   content,
 )
 
-#let definition(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let definition(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "definition" } else { taxon },
@@ -291,7 +310,7 @@
   content,
 )
 
-#let proposition(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let proposition(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "proposition" } else { taxon },
@@ -301,7 +320,7 @@
   content,
 )
 
-#let remark(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let remark(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "remark" } else { taxon },
@@ -311,7 +330,7 @@
   content,
 )
 
-#let conjecture(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let conjecture(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "conjecture" } else { taxon },
@@ -321,7 +340,7 @@
   content,
 )
 
-#let postulate(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let postulate(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "postulate" } else { taxon },
@@ -331,7 +350,7 @@
   content,
 )
 
-#let claim(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let claim(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "claim" } else { taxon },
@@ -341,7 +360,7 @@
   content,
 )
 
-#let observation(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let observation(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "observation" } else { taxon },
@@ -351,7 +370,7 @@
   content,
 )
 
-#let fact(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let fact(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "fact" } else { taxon },
@@ -361,7 +380,7 @@
   content,
 )
 
-#let hypothesis(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let hypothesis(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "hypothesis" } else { taxon },
@@ -371,7 +390,7 @@
   content,
 )
 
-#let axiom(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let axiom(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "axiom" } else { taxon },
@@ -381,7 +400,7 @@
   content,
 )
 
-#let lemma(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let lemma(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "lemma" } else { taxon },
@@ -391,7 +410,7 @@
   content,
 )
 
-#let theorem(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let theorem(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "theorem" } else { taxon },
@@ -401,7 +420,7 @@
   content,
 )
 
-#let corollary(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let corollary(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "corollary" } else { taxon },
@@ -411,7 +430,7 @@
   content,
 )
 
-#let example(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let example(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "example" } else { taxon },
@@ -421,7 +440,7 @@
   content,
 )
 
-#let proof(slug: none, title: none, taxon: none, numbering: false, open: true, catalog: true, content) = subtree(
+#let proof(slug: none, title: none, taxon: none, numbering: auto, open: true, catalog: true, content) = subtree(
   slug: slug,
   title: title,
   taxon: if taxon == none { "proof" } else { taxon },

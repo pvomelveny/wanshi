@@ -17,6 +17,10 @@ pub struct Build {
     pub inline_css: bool,
     pub inline_script: bool,
     pub asref: bool,
+    /// Site-wide default for whether sections carry numbers. A note overrides it
+    /// with `numbering` metadata, and a single block with `numbering:` on its
+    /// `#embed` or `#subtree`.
+    pub numbering: bool,
     pub output: String,
     pub edit: Option<String>,
     pub search: bool,
@@ -35,6 +39,7 @@ impl Default for Build {
             inline_css: false,
             inline_script: false,
             asref: false,
+            numbering: false,
             output: "./publish".to_string(),
             edit: None,
             search: true,
@@ -86,5 +91,21 @@ impl std::fmt::Display for FooterMode {
             FooterMode::Link => write!(f, "link"),
             FooterMode::Embed => write!(f, "embed"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Build;
+
+    #[test]
+    fn test_numbering_defaults_off_so_existing_sites_do_not_change() {
+        assert!(!Build::default().numbering);
+    }
+
+    #[test]
+    fn test_numbering_is_read_from_the_build_table() {
+        let build: Build = toml::from_str("numbering = true").unwrap();
+        assert!(build.numbering);
     }
 }
