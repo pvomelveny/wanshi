@@ -124,8 +124,13 @@ it a subtree: see #local("/guide/subtrees").
 = Headings hold embeds
 
 Every `=` on this page opened a section, and each embed above landed inside the
-one it was written under — look at the table of contents, which indents them to
-match. That is why *Knuth, collapsed* sits inside *Options* rather than beside
+one it was written under — look at the table of contents, which indents *A note
+that embeds another* under *Embeds chain* to match. Only *Typst, embedded here
+in full* is at the outer level, because it was written before the first heading.
+
+Containment does not depend on the catalog. *Knuth, collapsed* has
+`catalog: false`, so it has no row to indent, and it still sits inside *Options*
+in the article — scroll up and it is one step further in than the heading above
 it.
 
 A heading holding an embed does not adopt it. Follow #local("/refs/knuth-1984")
