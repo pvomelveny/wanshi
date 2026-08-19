@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::{
-    entry::{MetaData, KEY_DATE, KEY_TAXON, KEY_TITLE},
+    entry::{MetaData, KEY_DATE, KEY_INTERNAL_ANON_SUBTREE, KEY_TAXON, KEY_TITLE},
     environment,
     slug::Slug,
 };
@@ -98,18 +98,49 @@ pub(super) fn build(state: &CompileState) -> SearchIndex {
     }
 }
 
-/// A section's own prose, excluding sections embedded into it: embedded content
+/// A section's own prose, excluding notes embedded into it: embedded content
 /// belongs to the note that wrote it, and indexing it twice would make a hub
 /// page match everything it displays.
+///
+/// Internal-anonymous sections are the exception, and must be descended into. A
+/// heading is one of these, so nearly all of a page's prose now lives inside
+/// them — and they have no page of their own to be found by, since they are
+/// stripped before the index is built. Their text is the page's own text, and
+/// skipping them left every note searchable only down to its first heading.
 fn own_text(section: &Section) -> String {
     let mut text = String::new();
+    collect_own_text(section, &mut text);
+    text
+}
+
+fn collect_own_text(section: &Section, text: &mut String) {
     for content in &section.children {
-        if let SectionContent::Plain(html) = content {
-            text.push_str(&strip_html(html));
-            text.push(' ');
+        match content {
+            SectionContent::Plain(html) => {
+                text.push_str(&strip_html(html));
+                text.push(' ');
+            }
+            SectionContent::Embed(child) if is_internal_anonymous(child) => {
+                // The heading's own words, which were body prose before it
+                // became a section and are still prose to a reader. Nothing
+                // else carries them: the section is stripped, so it never
+                // becomes a result with a title of its own.
+                if let Some(title) = child.metadata.get_str(KEY_TITLE) {
+                    text.push_str(&strip_html(title));
+                    text.push(' ');
+                }
+                collect_own_text(child, text);
+            }
+            SectionContent::Embed(_) | SectionContent::Query(_) => {}
         }
     }
-    text
+}
+
+fn is_internal_anonymous(section: &Section) -> bool {
+    section
+        .metadata
+        .get_str(KEY_INTERNAL_ANON_SUBTREE)
+        .is_some_and(|value| value == "true")
 }
 
 fn strip_html(html: &str) -> String {
@@ -129,6 +160,11 @@ fn tokenize(text: &str) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        entry::{EntryMetaData, KEY_SLUG},
+        ordered_map::OrderedMap,
+    };
+    use std::collections::HashSet;
 
     #[test]
     fn test_tokenize_lowercases_splits_and_drops_short_tokens() {
@@ -213,5 +249,124 @@ mod tests {
         assert!(tokens.contains("prose"));
         assert!(!tokens.contains("color"));
         assert!(!tokens.contains("var"));
+    }
+
+    fn section(slug: &str, internal_anonymous: bool, children: Vec<SectionContent>) -> Section {
+        let mut metadata = OrderedMap::new();
+        metadata.insert(KEY_SLUG.to_string(), slug.to_string());
+        metadata.insert(KEY_TITLE.to_string(), format!("Titled {slug}"));
+        if internal_anonymous {
+            metadata.insert(KEY_INTERNAL_ANON_SUBTREE.to_string(), "true".to_string());
+        }
+        Section::new(EntryMetaData(metadata), children, HashSet::new())
+    }
+
+    fn plain(html: &str) -> SectionContent {
+        SectionContent::Plain(html.to_string())
+    }
+
+    /// A heading's section is internal-anonymous and is stripped before the
+    /// index is built, so its prose has no page of its own to be found by. It
+    /// belongs to the page, and skipping it made every note searchable only
+    /// down to its first heading.
+    #[test]
+    fn test_own_text_descends_into_headings() {
+        let page = section(
+            "page",
+            false,
+            vec![
+                plain("<p>intro</p>"),
+                SectionContent::Embed(section(
+                    "page/:background",
+                    true,
+                    vec![
+                        plain("<p>underheading</p>"),
+                        SectionContent::Embed(section(
+                            "page/:background/:deeper",
+                            true,
+                            vec![plain("<p>nested</p>")],
+                        )),
+                    ],
+                )),
+            ],
+        );
+
+        let tokens = tokenize(&own_text(&page));
+        for expected in ["intro", "underheading", "nested"] {
+            assert!(tokens.contains(expected), "missing `{expected}`");
+        }
+    }
+
+    /// A heading's words were body prose before it became a section, and are
+    /// still prose to a reader. Nothing else carries them — the section is
+    /// stripped, so it never becomes a result with a title of its own.
+    #[test]
+    fn test_own_text_indexes_the_heading_text_itself() {
+        let page = section(
+            "page",
+            false,
+            vec![SectionContent::Embed(section(
+                "page/:background",
+                true,
+                vec![plain("<p>prose</p>")],
+            ))],
+        );
+
+        let tokens = tokenize(&own_text(&page));
+        assert!(tokens.contains("background"), "heading text is not indexed");
+    }
+
+    /// A real embedded note's title belongs to that note's own result, and the
+    /// page must not match on it.
+    #[test]
+    fn test_own_text_does_not_take_an_embedded_notes_title() {
+        let page = section(
+            "page",
+            false,
+            vec![SectionContent::Embed(section("other", false, vec![]))],
+        );
+
+        assert!(!tokenize(&own_text(&page)).contains("other"));
+    }
+
+    /// The rule the descent must not undo: a note embedded in a page keeps its
+    /// own index entry, so counting its words for the page too would make a hub
+    /// match everything it displays.
+    #[test]
+    fn test_own_text_stops_at_a_real_embedded_note() {
+        let page = section(
+            "page",
+            false,
+            vec![
+                plain("<p>intro</p>"),
+                SectionContent::Embed(section("other", false, vec![plain("<p>elsewhere</p>")])),
+            ],
+        );
+
+        let tokens = tokenize(&own_text(&page));
+        assert!(tokens.contains("intro"));
+        assert!(!tokens.contains("elsewhere"));
+    }
+
+    /// An embedded note written under a heading is still a note. Descending
+    /// through the heading must not carry on into it.
+    #[test]
+    fn test_own_text_stops_at_a_note_embedded_under_a_heading() {
+        let page = section(
+            "page",
+            false,
+            vec![SectionContent::Embed(section(
+                "page/:background",
+                true,
+                vec![
+                    plain("<p>underheading</p>"),
+                    SectionContent::Embed(section("other", false, vec![plain("<p>elsewhere</p>")])),
+                ],
+            ))],
+        );
+
+        let tokens = tokenize(&own_text(&page));
+        assert!(tokens.contains("underheading"));
+        assert!(!tokens.contains("elsewhere"));
     }
 }
