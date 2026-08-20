@@ -64,6 +64,23 @@ pub struct RefsExportCommand {
     /// Omit to export everything the whole forest cites.
     #[arg(long)]
     from: Option<String>,
+
+    /// Output format. Defaults to the bibliography's own.
+    ///
+    /// Matching the source is the lossless choice both ways: BibTeX entries are
+    /// copied verbatim, and Hayagriva is this crate's native model. Converting
+    /// Hayagriva to BibTeX is not offered because hayagriva parses BibTeX but
+    /// cannot emit it.
+    #[arg(long, value_enum)]
+    format: Option<ExportFormat>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ExportFormat {
+    /// BibTeX, copied verbatim from the source.
+    Bib,
+    /// Hayagriva YAML.
+    Yaml,
 }
 
 /// Every section in the forest, with the links that resolve to nothing.
@@ -311,27 +328,52 @@ pub fn export(command: &RefsExportCommand) -> eyre::Result<()> {
     let bibliography_path = environment::refs_bibliography();
     let bibliography = Bibliography::load(&bibliography_path)?;
 
-    if !bibliography.is_biblatex() {
+    let source_format = if bibliography.is_biblatex() {
+        ExportFormat::Bib
+    } else {
+        ExportFormat::Yaml
+    };
+    let format = command.format.unwrap_or(source_format);
+
+    if format == ExportFormat::Bib && source_format == ExportFormat::Yaml {
         bail!(
-            "`{}` is a Hayagriva bibliography; verbatim export needs BibTeX. \
-             Point `[refs].bibliography` at a `.bib` file to export.",
+            "`{}` is a Hayagriva bibliography and cannot be exported as BibTeX: \
+             hayagriva reads BibTeX but does not write it. Export as `--format yaml`, \
+             or point `[refs].bibliography` at a `.bib` file.",
             bibliography_path
         );
     }
 
     let mut missing = Vec::new();
-    for key in &cited {
-        match bibliography.verbatim(key) {
-            Some(entry) => {
-                println!("{entry}");
-                println!();
+    match format {
+        ExportFormat::Bib => {
+            for key in &cited {
+                match bibliography.verbatim(key) {
+                    Some(entry) => println!("{entry}\n"),
+                    None => missing.push(key.clone()),
+                }
             }
-            None => missing.push(key.clone()),
+        }
+        ExportFormat::Yaml => {
+            let mut selected = hayagriva::Library::new();
+            for key in &cited {
+                match bibliography.get(key) {
+                    Some(entry) => selected.push(entry),
+                    None => missing.push(key.clone()),
+                }
+            }
+            let yaml = hayagriva::io::to_yaml_str(&selected)
+                .wrap_err("failed to serialise the selected works as Hayagriva YAML")?;
+            print!("{yaml}");
         }
     }
 
     for key in &missing {
-        color_print::ceprintln!("<y>Warning:</> `{}` is cited but not in `{}`.", key, bibliography_path);
+        color_print::ceprintln!(
+            "<y>Warning:</> `{}` is cited but not in `{}`.",
+            key,
+            bibliography_path
+        );
     }
     Ok(())
 }

@@ -288,10 +288,16 @@ reference manager cannot answer:
 wanshi refs export --from boolean/ > paper.bib
 ```
 
-That prints the entries cited by every note whose slug starts with `boolean/`,
-taken from the source file **verbatim** — brace protection like `{Boolean}` and
-any field wanshi does not model survive intact. Omit `--from` for the whole
-forest, and pass `--format yaml` for Hayagriva.
+That prints the entries cited by every note whose slug starts with `boolean/`.
+Omit `--from` for the whole forest.
+
+Output matches the bibliography's own format, which is the lossless choice both
+ways. A BibTeX source is copied **verbatim**, so brace protection like
+`{Boolean}` and any field wanshi does not model survive intact. A Hayagriva
+source is re-serialised, which is lossless because Hayagriva is the format this
+is parsed into anyway. `--format` overrides — but only from BibTeX to Hayagriva,
+since hayagriva reads BibTeX and does not write it. Asking for the impossible
+direction is an error rather than a lossy guess.
 
 #### One directory, flat
 

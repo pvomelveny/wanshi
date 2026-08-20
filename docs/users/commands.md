@@ -172,14 +172,19 @@ Options:
 
 ### `refs export`
 
-Prints the bibliography that a set of notes cites, taken from the source file
-verbatim so nothing is lost to a round trip.
+Prints the bibliography that a set of notes cites.
+
+Output matches the bibliography's own format: BibTeX entries are copied
+verbatim, Hayagriva is re-serialised from its native model. Both are lossless.
 
 Options:
 
 - `--config <path>`, short `-c`: configuration file.
 - `--from <slug-prefix>`: only consider sections whose slug starts with this.
   Omit for the whole forest.
+- `--format <bib|yaml>`: override the output format. Only `bib` → `yaml` is
+  possible; hayagriva reads BibTeX but cannot write it, so the reverse is an
+  error rather than a lossy conversion.
 
 ## `wanshi snip`
 
