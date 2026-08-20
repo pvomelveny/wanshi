@@ -96,35 +96,42 @@ impl Forest {
     }
 }
 
+/// Why a slug is a candidate for generation.
+///
+/// The distinction decides what counts as a problem. A work that was cited but
+/// is not in the bibliography is a real one — the citation will stay dangling.
+/// A note that merely lives in the references directory and is not in the
+/// bibliography is not: it is hand-written, which is allowed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    /// A dangling citation: promised by a link, not yet imported.
+    Cited,
+    /// An existing note under the references directory.
+    Existing,
+}
+
 pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
     environment::init_environment(command.config.clone().into(), BuildMode::Check)?;
 
     let forest = Forest::parse()?;
     let refs_dir = environment::refs_dir();
 
-    // Two sources of work, and both matter.
-    //
-    // A dangling link under the references directory is a work that has been
-    // cited but not yet imported — the note the citation promised. Only links
-    // under that directory are ours: a dangling link anywhere else is a note
-    // the author has not written, and inventing a file for it would be wrong.
-    //
-    // An existing stub is a work whose details may have changed upstream since
-    // it was imported. Refreshing those is what keeps the forest from drifting
-    // away from the reference manager, and is the whole reason a generated stub
-    // is marked as such.
-    let mut wanted: BTreeSet<Slug> = links::dangling_local_links(&forest.shallows)
-        .into_iter()
-        .filter(|dangling| dangling.target.as_str().starts_with(&refs_dir))
-        .map(|dangling| dangling.target)
-        .collect();
-    wanted.extend(
-        forest
-            .shallows
-            .keys()
-            .filter(|slug| slug.as_str().starts_with(&refs_dir))
-            .copied(),
-    );
+    // Two sources of work. A dangling link under the references directory is a
+    // work cited but not yet imported — the note the citation promised. An
+    // existing generated note is one whose details may have changed upstream;
+    // refreshing those is what keeps the forest from drifting away from the
+    // reference manager.
+    let mut wanted: std::collections::BTreeMap<Slug, Origin> =
+        links::dangling_local_links(&forest.shallows)
+            .into_iter()
+            .filter(|dangling| dangling.target.as_str().starts_with(&refs_dir))
+            .map(|dangling| (dangling.target, Origin::Cited))
+            .collect();
+    for slug in forest.shallows.keys() {
+        if slug.as_str().starts_with(&refs_dir) {
+            wanted.entry(*slug).or_insert(Origin::Existing);
+        }
+    }
 
     if wanted.is_empty() {
         println!("Nothing to sync: no works are cited.");
@@ -153,10 +160,10 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
     let mut created = Vec::new();
     let mut refreshed = Vec::new();
     let mut unchanged = 0usize;
-    let mut adopted = Vec::new();
-    let mut missing = Vec::new();
+    let mut hand_written = 0usize;
+    let mut uncitable = Vec::new();
 
-    for target in &wanted {
+    for (target, origin) in &wanted {
         let segment = target
             .as_str()
             .strip_prefix(&refs_dir)
@@ -167,17 +174,7 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
             continue;
         }
 
-        let Some(&key) = by_slug_segment.get(segment) else {
-            missing.push(target.to_string());
-            continue;
-        };
-        let entry = bibliography
-            .get(key)
-            .ok_or_else(|| eyre!("bibliography lost key `{key}` between listing and lookup"))?;
-
         let path = environment::trees_dir().join(format!("{target}.{}", Ext::Typ));
-        let source = refs::stub_source(entry, &parent_slug);
-
         let existing = if path.exists() {
             Some(
                 std::fs::read_to_string(&path)
@@ -187,21 +184,39 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
             None
         };
 
-        match existing {
-            // Taken over by hand: the marker is gone, so leave it alone. That
-            // is the documented way to stop the tool touching a file.
-            Some(existing) if !existing.contains(refs::STUB_MARKER) => {
-                adopted.push(target.to_string());
-                continue;
+        // Checked before the bibliography lookup, so a note written by hand is
+        // never reported as missing from a file it was never meant to be in.
+        if existing
+            .as_deref()
+            .is_some_and(|existing| !existing.contains(refs::STUB_MARKER))
+        {
+            hand_written += 1;
+            continue;
+        }
+
+        let Some(&key) = by_slug_segment.get(segment) else {
+            if *origin == Origin::Cited {
+                uncitable.push(target.to_string());
             }
-            // Writing identical bytes would touch the mtime for nothing, and a
-            // watcher would rebuild the site over it.
-            Some(existing) if existing == source => {
-                unchanged += 1;
-                continue;
-            }
-            Some(_) => refreshed.push((target.to_string(), path.clone())),
-            None => created.push((target.to_string(), path.clone())),
+            continue;
+        };
+        let entry = bibliography
+            .get(key)
+            .ok_or_else(|| eyre!("bibliography lost key `{key}` between listing and lookup"))?;
+
+        let source = refs::stub_source(entry, &parent_slug);
+
+        // Writing identical bytes would touch the mtime for nothing, and a
+        // running `wanshi serve` would rebuild the site over it.
+        if existing.as_deref() == Some(source.as_str()) {
+            unchanged += 1;
+            continue;
+        }
+
+        if existing.is_some() {
+            refreshed.push(path.clone());
+        } else {
+            created.push(path.clone());
         }
 
         if !command.dry_run {
@@ -215,35 +230,30 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
     }
 
     let verb = if command.dry_run { "would write" } else { "wrote" };
-    for (_, path) in &created {
+    for path in &created {
         color_print::cprintln!("<g>[refs]</> {} {}", verb, path);
     }
-    for (_, path) in &refreshed {
+    for path in &refreshed {
         color_print::cprintln!("<c>[refs]</> {} {} (updated)", verb, path);
     }
-    for slug in &adopted {
+    for slug in &uncitable {
         color_print::ceprintln!(
-            "<y>Note:</> `{}` is no longer marked as generated; leaving it alone.",
-            slug
-        );
-    }
-    for slug in &missing {
-        color_print::ceprintln!(
-            "<y>Warning:</> no entry in the bibliography for `{}`.",
-            slug
+            "<y>Warning:</> `{}` is cited but has no entry in `{}`.",
+            slug,
+            bibliography_path
         );
     }
 
-    if created.is_empty() && refreshed.is_empty() && adopted.is_empty() && missing.is_empty() {
-        println!("Refs sync: up to date ({unchanged} note(s) unchanged).");
+    if created.is_empty() && refreshed.is_empty() && uncitable.is_empty() {
+        println!("Refs sync: up to date.");
     } else {
         println!(
-            "Refs sync: {} new, {} updated, {} unchanged, {} hand-owned, {} missing from the bibliography.",
+            "Refs sync: {} new, {} updated, {} unchanged, {} written by hand, {} cited but not in the bibliography.",
             created.len(),
             refreshed.len(),
             unchanged,
-            adopted.len(),
-            missing.len()
+            hand_written,
+            uncitable.len()
         );
     }
     Ok(())
