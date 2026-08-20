@@ -2,19 +2,15 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use eyre::{bail, eyre, WrapErr};
 
 use crate::{
-    compiler::{
-        self,
-        section::{HTMLContent, LazyContent, UnresolvedSection},
-    },
+    compiler::{self, links, section::UnresolvedSection},
     config,
     environment::{self, BuildMode},
-    path_utils,
-    slug::{self, Ext, Slug},
+    slug::Slug,
 };
 
 #[derive(clap::Args)]
@@ -132,31 +128,8 @@ fn parse_shallows_no_cache(
     workspace: &compiler::Workspace,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> HashMap<Slug, UnresolvedSection> {
-    let mut shallows = HashMap::new();
-    let mut entries: Vec<(Slug, Ext)> = workspace
-        .slug_exts
-        .iter()
-        .map(|(&slug, &ext)| (slug, ext))
-        .collect();
-    entries.sort_by_key(|(slug, _)| slug.as_str());
-
-    for (slug, ext) in entries {
-        match compiler::parse_source_sections(slug, ext) {
-            Ok(sections) => {
-                for (section_slug, section) in sections {
-                    if shallows.insert(section_slug, section).is_some() {
-                        diagnostics.push(Diagnostic::error(format!(
-                            "Duplicate section slug `{section_slug}` generated while parsing `{slug}.{ext}`."
-                        )));
-                    }
-                }
-            }
-            Err(err) => diagnostics.push(Diagnostic::error(format!(
-                "Failed to parse `{slug}.{ext}`: {err:#}"
-            ))),
-        }
-    }
-
+    let (shallows, failures) = links::parse_all_sections(workspace);
+    diagnostics.extend(failures.into_iter().map(Diagnostic::error));
     shallows
 }
 
@@ -164,26 +137,18 @@ fn collect_dangling_local_links(
     shallows: &HashMap<Slug, UnresolvedSection>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let mut seen = HashSet::new();
-    for (&from_slug, section) in shallows {
-        let HTMLContent::Lazy(contents) = &section.content else {
-            continue;
-        };
-        for content in contents {
-            let LazyContent::Local(local) = content else {
-                continue;
-            };
-            let target_slug = resolve_subsection_slug(from_slug, &local.url);
-            if shallows.contains_key(&target_slug) {
-                continue;
-            }
-            if seen.insert((from_slug, target_slug, local.url.clone())) {
-                diagnostics.push(Diagnostic::warning(format!(
-                    "Dangling local link in `{}`: `{}` resolves to missing section `{}`.",
-                    from_slug, local.url, target_slug
-                )));
-            }
+    let refs_dir = environment::refs_dir();
+    for dangling in links::dangling_local_links(shallows) {
+        let mut message = format!(
+            "Dangling local link in `{}`: `{}` resolves to missing section `{}`.",
+            dangling.from, dangling.url, dangling.target
+        );
+        // A missing work is a different problem from a missing note: the note
+        // has to be written, the work only has to be imported.
+        if dangling.target.as_str().starts_with(&refs_dir) {
+            message.push_str(" Run `wanshi refs sync` to generate it from the bibliography.");
         }
+        diagnostics.push(Diagnostic::warning(message));
     }
 }
 
@@ -199,10 +164,6 @@ fn validate_compile_graph(
             "Failed to compile section graph: {err:#}"
         )));
     }
-}
-
-fn resolve_subsection_slug(current_slug: Slug, url: &str) -> Slug {
-    slug::to_slug(path_utils::relative_to_current(current_slug.as_str(), url))
 }
 
 fn print_diagnostic(diagnostic: &Diagnostic) {

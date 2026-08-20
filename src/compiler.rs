@@ -13,6 +13,7 @@ mod output_manifest;
 mod query;
 mod rss;
 mod search;
+pub mod links;
 pub mod section;
 mod serve_session;
 mod source_scan;

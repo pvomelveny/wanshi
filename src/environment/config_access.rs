@@ -37,6 +37,26 @@ pub fn trees_dir() -> Utf8PathBuf {
     super::root_dir().join(trees_dir_without_root())
 }
 
+/// Slug prefix under the source tree where generated reference stubs live.
+///
+/// Returned with a trailing `/` so a `starts_with` test cannot match a sibling
+/// whose name merely begins with it — `refs` must not claim `refsheet/x`.
+pub fn refs_dir() -> String {
+    let dir = with_config(|cfg| cfg.refs.dir.clone());
+    let trimmed = dir.trim_matches('/');
+    format!("{trimmed}/")
+}
+
+/// Path to the bibliography, resolved against the project root.
+///
+/// Root-relative, not cwd-relative: every other configured path works that way,
+/// and the one that did not (`typst-root`) was a bug — `wanshi build --config
+/// path/to/Wanshi.toml` from elsewhere looked for sources under the wrong
+/// directory.
+pub fn refs_bibliography() -> Utf8PathBuf {
+    super::root_dir().join(with_config(|cfg| cfg.refs.bibliography.clone()))
+}
+
 pub fn theme_paths() -> Vec<Utf8PathBuf> {
     let root = super::root_dir();
     with_config(|cfg| {
