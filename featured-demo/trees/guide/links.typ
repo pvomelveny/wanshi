@@ -51,8 +51,9 @@ entirely. They generate no backlink and appear in no listing.
 = References
 
 A note marked `asref` is treated as a citation rather than an inline link: it
-collects in the footer instead of interrupting the sentence. The notes under
-#local("/refs/index") are marked that way, so this citation of
+collects in the footer instead of interrupting the sentence. A `reference` taxon
+does the same on its own, which is why every note under #local("/refs/index")
+behaves this way whether or not it sets the key. So this citation of
 #local("/refs/knuth-1984") drops to the bottom of the page rather than reading
 as a detour.
 

@@ -11,8 +11,8 @@
   "asback": "false",
 ))
 
-Notes here are marked `"asref": "true"`, so linking to one cites it: the link
-drops into the citing page's footer instead of interrupting the sentence. See
+Notes here carry a `reference` taxon, so linking to one cites it: the link drops
+into the citing page's footer instead of interrupting the sentence. See
 #local("/guide/links") for the mechanism.
 
 Two of these were written by hand. #local("/refs/knuth1984literate") was not —
