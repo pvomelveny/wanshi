@@ -11,11 +11,12 @@
   "date": "1984",
   "author": "Donald E. Knuth",
   "citekey": "knuth1984literate",
-  "type": "book",
+  "type": "article",
+  "container": "The Computer Journal",
   "doi": "10.1093/comjnl/27.2.97",
   "parent": "refs/index",
 ))
 
-Oxford University Press, vol. 27, pp. 97-111, 1984.
+_The Computer Journal_ *27*(2), 97–111.
 
 #external("https://doi.org/10.1093/comjnl/27.2.97", "doi:10.1093/comjnl/27.2.97")
