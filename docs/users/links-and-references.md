@@ -238,9 +238,28 @@ exist yet, and point you at the fix. Run it:
 wanshi refs sync
 ```
 
-That writes `trees/refs/kkl1988.typ` from the bibliography entry — title,
-authors, year, container, DOI, and the citation key — with a `reference` taxon,
-so it behaves exactly like the hand-written note above. Nothing else changes:
+That writes `trees/refs/kkl1988.typ` from the bibliography entry with a
+`reference` taxon, so it behaves exactly like the hand-written note above. The
+page carries where the work appeared and how to reach it:
+
+```
+Kahn, Kalai & Linial 1988 — The influence of variables on Boolean functions
+1988   Jeff Kahn, Gil Kalai, Nathan Linial
+
+_Proc. 29th FOCS_, pp. 68–80.
+
+doi:10.1109/SFCS.1988.21923 · ieee.org
+```
+
+Volume, issue, pages, editors, publisher and location are used when present, and
+an entry with none of them still names what kind of work it is rather than
+rendering an empty line. **Every link is kept** — a DOI does not suppress a
+separate URL, since for most libraries the URL is the only address on file. An
+arXiv posting is recognised in either form (the abs URL, or the DataCite
+`10.48550/arXiv.…` DOI) and rendered once as `arXiv:2105.10386`, because both
+resolve to the same page and the identifier is what a reader recognises. Other
+URLs are labelled by host, since a publisher link runs to 90 opaque characters
+and says nothing in full. Nothing else changes:
 the citation is a link, so the citing note gets a References footer and the work
 collects a backlink from every note that cites it.
 

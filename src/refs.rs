@@ -273,6 +273,14 @@ pub fn stub_source(entry: &Entry, parent_slug: &str) -> String {
     if let Some(doi) = entry.doi() {
         metadata.push(("doi".to_string(), doi.to_string()));
     }
+    // The URL is kept as metadata as well as rendered, so anything reading
+    // `wanshi.json` can reach the work without re-parsing the bibliography.
+    if let Some(url) = entry.url() {
+        metadata.push(("url".to_string(), url.value.to_string()));
+    }
+    if let Some(isbn) = entry.isbn() {
+        metadata.push(("isbn".to_string(), isbn.to_string()));
+    }
     // Declared explicitly: embedding a stub would otherwise reparent it under
     // the embedding note, filing a work under whichever note happened to quote
     // it.
@@ -283,21 +291,26 @@ pub fn stub_source(entry: &Entry, parent_slug: &str) -> String {
         .map(|(key, value)| format!("  \"{}\": \"{}\",\n", key, escape(value)))
         .collect::<String>();
 
-    let mut body = String::new();
-    if let Some(line) = reference_line(entry) {
-        body.push_str(&line);
-        body.push('\n');
+    let mut body = reference_line(entry);
+    body.push('\n');
+
+    // Links get their own line, separated by a middot: they are a row of
+    // addresses rather than part of the sentence above.
+    let links = work_links(entry);
+    if !links.is_empty() {
+        let rendered = links
+            .iter()
+            .map(|(url, label)| format!("#external(\"{}\", \"{}\")", escape(url), escape(label)))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        body.push_str(&format!("\n{rendered}\n"));
     }
-    if let Some(doi) = entry.doi() {
-        body.push_str(&format!(
-            "\n#external(\"https://doi.org/{}\", \"doi:{}\")\n",
-            doi, doi
-        ));
-    } else if let Some(url) = entry.url() {
-        body.push_str(&format!(
-            "\n#external(\"{}\", \"{}\")\n",
-            url.value, url.value
-        ));
+
+    // An ISBN is not a link, but it is how a book is ordered or found in a
+    // library catalogue, so it belongs beside the links rather than buried in
+    // metadata.
+    if let Some(isbn) = entry.isbn() {
+        body.push_str(&format!("\n#emph[ISBN {}]\n", escape_markup(isbn)));
     }
 
     format!(
@@ -326,37 +339,235 @@ pub const STUB_MARKER: &str =
 /// The year is deliberately absent. It is already in the title and again in the
 /// date column, and a third copy at the end of this line was the most visible
 /// thing on the page that did not need to be there.
-fn reference_line(entry: &Entry) -> Option<String> {
-    let mut line = String::new();
+/// The arXiv identifier a URL or DOI points at.
+///
+/// Recognised in both forms because Zotero records both: the abs/pdf URL, and
+/// the DataCite DOI `10.48550/arXiv.<id>` that arXiv now mints for every
+/// posting. They address the same page, so knowing they are the same is what
+/// keeps a preprint from listing two links to itself.
+fn arxiv_id(value: &str) -> Option<String> {
+    let lower = value.to_ascii_lowercase();
+    let rest = ["arxiv.org/abs/", "arxiv.org/pdf/", "10.48550/arxiv."]
+        .iter()
+        .find_map(|marker| lower.split(marker).nth(1))?;
 
-    if let Some(container) = container(entry) {
-        line.push_str(&format!("_{container}_"));
-    } else if let Some(name) = entry.publisher().and_then(|publisher| publisher.name()) {
-        line.push_str(&name.to_string());
+    // Trim a version suffix and anything after the identifier: `2105.10386v2`
+    // and `2105.10386.pdf` are the same paper as `2105.10386`.
+    let id: String = rest
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit() || *ch == '.' || *ch == '/')
+        .collect();
+    let id = id.trim_end_matches('.').to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+/// A readable label for a bare URL: its host, without `www.`.
+///
+/// Publisher URLs are frequently enormous — a Cambridge Core book link runs
+/// past 90 characters of opaque hash — and printing one in full makes a stub
+/// unreadable while telling a reader nothing. The host is the part that says
+/// where the link goes.
+fn host_label(url: &str) -> String {
+    let without_scheme = url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(url);
+    let host = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(without_scheme);
+    host.trim_start_matches("www.").to_string()
+}
+
+/// Every way to reach the work, most recognisable first.
+///
+/// A stub whose whole job is to stand for a work should say where the work is.
+/// Both a DOI and a URL are kept when they lead to different places, and
+/// neither is dropped for the other -- 57 of the 63 entries in the library this
+/// was built against carry a URL, so preferring the DOI silently discarded the
+/// only link for most of them.
+fn work_links(entry: &Entry) -> Vec<(String, String)> {
+    let doi = entry.doi().map(|doi| doi.to_string());
+    let url = entry.url().map(|url| url.value.to_string());
+
+    let mut links = Vec::new();
+
+    // An arXiv posting is reachable by DOI and by URL, and the identifier a
+    // reader actually recognises is neither -- it is the arXiv id.
+    let arxiv = url
+        .as_deref()
+        .and_then(arxiv_id)
+        .or_else(|| doi.as_deref().and_then(arxiv_id));
+    if let Some(id) = &arxiv {
+        links.push((format!("https://arxiv.org/abs/{id}"), format!("arXiv:{id}")));
     }
 
-    if let Some(volume) = volume(entry) {
-        if !line.is_empty() {
-            line.push(' ');
+    if let Some(doi) = &doi {
+        // A DataCite arXiv DOI resolves to the link already listed above.
+        if arxiv_id(doi).is_none() {
+            links.push((format!("https://doi.org/{doi}"), format!("doi:{doi}")));
         }
-        line.push_str(&format!("*{volume}*"));
     }
-    if let Some(issue) = issue(entry) {
-        line.push_str(&format!("({issue})"));
+
+    if let Some(url) = &url {
+        let is_the_arxiv_link = arxiv.is_some() && arxiv_id(url).is_some();
+        // Zotero sometimes stores the DOI resolver itself as the URL.
+        let is_the_doi_link = doi
+            .as_ref()
+            .is_some_and(|doi| url.contains(doi.as_str()));
+        if !is_the_arxiv_link && !is_the_doi_link {
+            links.push((url.clone(), host_label(url)));
+        }
+    }
+
+    links
+}
+
+/// The entry type as a display word: `Report`, `Thesis`, `Book chapter`.
+fn type_label(entry: &Entry) -> String {
+    let name = entry_type_name(entry.entry_type());
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => name,
+    }
+}
+
+/// Where the work appeared, as one sentence.
+///
+/// Always returns something. The previous version returned `None` whenever an
+/// entry had no container, volume or pages, which is every thesis, report and
+/// preprint -- so the works least likely to be recognised from their title
+/// alone were exactly the ones whose stub said nothing at all. Naming the kind
+/// of thing it is beats an empty line.
+fn reference_line(entry: &Entry) -> String {
+    // Comma-separated clauses describing the work's place of publication.
+    let mut clauses: Vec<String> = Vec::new();
+
+    let container = container(entry);
+
+    // "In" belongs to a work bound inside a larger one -- a chapter, a paper in
+    // a proceedings -- and not to a journal article, which is cited as the
+    // periodical and volume alone. The distinction is the *parent's* type, not
+    // the entry's: hayagriva files both `@article` and `@inproceedings` as
+    // `Article`, and they differ only in what they sit inside.
+    let bound_inside = entry.parents().iter().any(|parent| {
+        matches!(
+            parent.entry_type(),
+            EntryType::Proceedings | EntryType::Book | EntryType::Anthology | EntryType::Reference
+        )
+    });
+
+    // A publisher's name already says "this is a book", so labelling it as one
+    // too reads as filler: "Book. Cambridge University Press, Cambridge."
+    let named_publisher = entry
+        .publisher()
+        .and_then(|publisher| publisher.name())
+        .is_some();
+    let implied_by_imprint = named_publisher && matches!(entry.entry_type(), EntryType::Book);
+
+    // The opening clause names the venue, or failing that the kind of work.
+    let mut opening = match &container {
+        Some(title) if bound_inside => format!("In _{}_", escape_markup(title)),
+        Some(title) => format!("_{}_", escape_markup(title)),
+        None if implied_by_imprint => String::new(),
+        None => type_label(entry),
+    };
+    // A volume number modifies a named venue -- `_Annals_ *192*(3)` -- so with
+    // no venue to attach to it has to say what it is, or the line opens on a
+    // bare emphasised number: `*221*, ed. Volker Kaibel…`.
+    let volume = volume(entry);
+    let issue = issue(entry);
+    if opening.is_empty() {
+        if let Some(volume) = &volume {
+            clauses.push(format!("vol. {volume}"));
+        }
+        if let Some(issue) = &issue {
+            clauses.push(format!("no. {issue}"));
+        }
+    } else {
+        if let Some(volume) = &volume {
+            opening.push_str(&format!(" *{volume}*"));
+            if let Some(issue) = &issue {
+                opening.push_str(&format!("({issue})"));
+            }
+        } else if let Some(issue) = &issue {
+            opening.push_str(&format!(", no. {issue}"));
+        }
+        clauses.push(opening);
+    }
+
+    if let Some(editors) = editor_list(entry) {
+        clauses.push(format!("ed. {editors}"));
     }
 
     if let Some(pages) = entry.page_range() {
-        if !line.is_empty() {
-            line.push_str(", ");
-        }
-        line.push_str(&en_dash_range(&pages.to_string()));
+        clauses.push(format!("pp. {}", en_dash_range(&pages.to_string())));
     }
 
-    if line.is_empty() {
-        None
-    } else {
-        Some(format!("{line}."))
+    let mut line = clauses.join(", ");
+
+    // The publisher opens its own sentence: it modifies the work, not the
+    // volume-and-pages clause it would otherwise attach to.
+    let publisher = entry.publisher();
+    let name = publisher.and_then(|publisher| publisher.name()).map(|name| name.to_string());
+    let location = publisher
+        .and_then(|publisher| publisher.location())
+        .map(|location| location.to_string());
+    let imprint = match (name, location) {
+        (Some(name), Some(location)) => Some(format!("{name}, {location}")),
+        (Some(name), None) => Some(name),
+        (None, Some(location)) => Some(location),
+        (None, None) => None,
+    };
+    if let Some(imprint) = imprint {
+        if line.is_empty() {
+            line = escape_markup(&imprint);
+        } else {
+            line.push_str(&format!(". {}", escape_markup(&imprint)));
+        }
     }
+
+    format!("{line}.")
+}
+
+/// Editors, given-name first, as a readable list.
+fn editor_list(entry: &Entry) -> Option<String> {
+    let editors = entry.editors()?;
+    if editors.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = editors
+        .iter()
+        .map(|person| person.given_first(false))
+        .collect();
+    Some(match names.as_slice() {
+        [one] => one.clone(),
+        [first, second] => format!("{first} and {second}"),
+        [rest @ .., last] => format!("{} and {}", rest.join(", "), last),
+        [] => unreachable!("checked non-empty above"),
+    })
+}
+
+/// Neutralise Typst markup characters in text that is emitted as content.
+///
+/// Titles carry `_`, `*` and `@` more often than one would like -- a chemistry
+/// title with `_2`, a filename, an email -- and each is markup in a Typst body.
+/// Unescaped, `Ext_2` silently begins emphasis that runs to the next
+/// underscore, or to the end of the paragraph.
+fn escape_markup(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if matches!(ch, '_' | '*' | '@' | '#' | '$' | '`' | '<' | '>' | '\\') {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// A work's volume, which for a journal article belongs to the periodical.
@@ -540,7 +751,7 @@ mod tests {
     fn line(key: &str) -> String {
         let library = hayagriva::io::from_biblatex_str(JOURNAL).expect("sample parses");
         let entry = library.get(key).expect("entry");
-        reference_line(entry).expect("a line")
+        reference_line(entry)
     }
 
     /// Hayagriva files a journal article's volume and issue on the periodical
@@ -550,18 +761,19 @@ mod tests {
     fn test_a_journal_article_keeps_its_volume_and_issue() {
         assert_eq!(
             line("knuth1984literate"),
-            "_The Computer Journal_ *27*(2), 97–111."
+            "_The Computer Journal_ *27*(2), pp. 97–111."
         );
     }
 
     #[test]
     fn test_a_book_names_its_publisher_and_nothing_it_does_not_have() {
+        // "Book. A Press." said the same thing twice.
         assert_eq!(line("book1999"), "A Press.");
     }
 
     #[test]
     fn test_proceedings_read_as_a_container_with_pages() {
-        assert_eq!(line("proc2001"), "_Proceedings of Somewhere_, 5–9.");
+        assert_eq!(line("proc2001"), "In _Proceedings of Somewhere_, pp. 5–9.");
     }
 
     /// The year is in the title and in the date column already; a third copy at
@@ -584,13 +796,100 @@ mod tests {
         assert_eq!(en_dash_range("12-"), "12-");
     }
 
-    /// An entry with no container, publisher, volume or pages has no line to
-    /// write, and an empty paragraph under the title is worse than none.
+    /// An entry with no container, publisher, volume or pages used to produce
+    /// no line at all -- which is every thesis, report and preprint, so the
+    /// works least recognisable from a title alone were exactly the ones whose
+    /// stub said nothing. Naming the kind of thing it is beats an empty line.
     #[test]
-    fn test_an_entry_with_no_detail_has_no_line() {
+    fn test_an_entry_with_no_detail_still_names_its_kind() {
         let library =
             hayagriva::io::from_biblatex_str("@misc{bare, title = {Bare}, year = {2020}}")
                 .expect("parses");
-        assert!(reference_line(library.get("bare").expect("entry")).is_none());
+        assert_eq!(
+            reference_line(library.get("bare").expect("entry")),
+            "Misc."
+        );
+    }
+
+    /// Zotero records an arXiv posting twice -- as the abs URL and as the
+    /// DataCite DOI arXiv mints for it -- and both resolve to the same page.
+    /// Listing them separately gave a preprint two links to itself.
+    #[test]
+    fn test_arxiv_is_recognised_in_both_the_url_and_the_doi() {
+        assert_eq!(arxiv_id("http://arxiv.org/abs/2105.10386").as_deref(), Some("2105.10386"));
+        assert_eq!(arxiv_id("https://arxiv.org/pdf/2105.10386v2").as_deref(), Some("2105.10386"));
+        assert_eq!(arxiv_id("10.48550/arXiv.2105.10386").as_deref(), Some("2105.10386"));
+        assert_eq!(arxiv_id("10.1017/CBO9781107325715.010"), None);
+        assert_eq!(arxiv_id("https://www.cambridge.org/core/books/x"), None);
+    }
+
+    /// The DOI used to win and the URL was discarded. 57 of the 63 entries in
+    /// the library this was built against carry a URL, so that silently threw
+    /// away the only link for most of them.
+    #[test]
+    fn test_a_doi_and_a_separate_url_are_both_kept() {
+        let library = hayagriva::io::from_biblatex_str(
+            r#"@book{both,
+                 title = {A Book},
+                 year = {2021},
+                 doi = {10.1017/9781108606806},
+                 url = {https://www.cambridge.org/core/books/x/ABC123},
+               }"#,
+        )
+        .expect("parses");
+        let links = work_links(library.get("both").expect("entry"));
+        assert_eq!(
+            links,
+            vec![
+                (
+                    "https://doi.org/10.1017/9781108606806".to_string(),
+                    "doi:10.1017/9781108606806".to_string()
+                ),
+                (
+                    "https://www.cambridge.org/core/books/x/ABC123".to_string(),
+                    "cambridge.org".to_string()
+                ),
+            ]
+        );
+    }
+
+    /// An arXiv preprint carrying both forms yields one link, labelled with the
+    /// identifier a reader recognises rather than either raw address.
+    #[test]
+    fn test_an_arxiv_preprint_yields_one_link() {
+        let library = hayagriva::io::from_biblatex_str(
+            r#"@report{pre,
+                 title = {A Preprint},
+                 year = {2021},
+                 doi = {10.48550/arXiv.2105.10386},
+                 url = {http://arxiv.org/abs/2105.10386},
+               }"#,
+        )
+        .expect("parses");
+        let links = work_links(library.get("pre").expect("entry"));
+        assert_eq!(
+            links,
+            vec![(
+                "https://arxiv.org/abs/2105.10386".to_string(),
+                "arXiv:2105.10386".to_string()
+            )]
+        );
+    }
+
+    /// A publisher URL runs past 90 opaque characters and says nothing in full.
+    #[test]
+    fn test_host_label_strips_scheme_path_and_www() {
+        assert_eq!(host_label("https://www.cambridge.org/core/books/x/ABC"), "cambridge.org");
+        assert_eq!(host_label("http://arxiv.org/abs/1"), "arxiv.org");
+        assert_eq!(host_label("https://scholarworks.calstate.edu/x?y=1"), "scholarworks.calstate.edu");
+    }
+
+    /// `_` and `*` are markup in a Typst body, so an unescaped title beginning
+    /// emphasis runs it to the end of the paragraph.
+    #[test]
+    fn test_markup_characters_in_a_title_are_escaped() {
+        assert_eq!(escape_markup("Ext_2 and Tor_1"), "Ext\\_2 and Tor\\_1");
+        assert_eq!(escape_markup("a@b"), "a\\@b");
+        assert_eq!(escape_markup("plain"), "plain");
     }
 }
