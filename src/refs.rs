@@ -318,29 +318,83 @@ pub const STUB_MARKER: &str =
      // comment to take the file over by hand.";
 
 /// One legible line of bibliographic detail beneath the title.
+///
+/// Written the way a reference list writes it — `_The Computer Journal_ *27*(2),
+/// 97–111.` — rather than with `vol.`/`pp.` labels, so a generated stub reads
+/// like the hand-written ones it sits beside in a References footer.
+///
+/// The year is deliberately absent. It is already in the title and again in the
+/// date column, and a third copy at the end of this line was the most visible
+/// thing on the page that did not need to be there.
 fn reference_line(entry: &Entry) -> Option<String> {
-    let mut parts: Vec<String> = Vec::new();
+    let mut line = String::new();
 
     if let Some(container) = container(entry) {
-        parts.push(format!("_{}_", container));
+        line.push_str(&format!("_{container}_"));
     } else if let Some(name) = entry.publisher().and_then(|publisher| publisher.name()) {
-        parts.push(name.to_string());
-    }
-    if let Some(volume) = entry.volume() {
-        parts.push(format!("vol. {volume}"));
-    }
-    if let Some(pages) = entry.page_range() {
-        parts.push(format!("pp. {pages}"));
-    }
-    if let Some(year) = year(entry) {
-        parts.push(year.to_string());
+        line.push_str(&name.to_string());
     }
 
-    if parts.is_empty() {
+    if let Some(volume) = volume(entry) {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(&format!("*{volume}*"));
+    }
+    if let Some(issue) = issue(entry) {
+        line.push_str(&format!("({issue})"));
+    }
+
+    if let Some(pages) = entry.page_range() {
+        if !line.is_empty() {
+            line.push_str(", ");
+        }
+        line.push_str(&en_dash_range(&pages.to_string()));
+    }
+
+    if line.is_empty() {
         None
     } else {
-        Some(format!("{}.", parts.join(", ")))
+        Some(format!("{line}."))
     }
+}
+
+/// A work's volume, which for a journal article belongs to the periodical.
+///
+/// Hayagriva models a journal article as a child of its periodical and files
+/// volume and issue on that parent, so reading only `entry.volume()` finds a
+/// volume on a book — where it rarely means anything — and misses it on exactly
+/// the entry type that needs one.
+fn volume(entry: &Entry) -> Option<String> {
+    inherited(entry, |entry| entry.volume().map(|v| v.to_string()))
+}
+
+fn issue(entry: &Entry) -> Option<String> {
+    inherited(entry, |entry| entry.issue().map(|v| v.to_string()))
+}
+
+/// Read a field from the entry, falling back to the first parent that has it.
+fn inherited(entry: &Entry, read: impl Fn(&Entry) -> Option<String> + Copy) -> Option<String> {
+    read(entry).or_else(|| entry.parents().iter().find_map(read))
+}
+
+/// `97-111` becomes `97–111`.
+///
+/// BibTeX writes the range as `97--111` and hayagriva normalises it to a single
+/// ASCII hyphen; a reference list uses an en dash, which is what the
+/// hand-written notes in the demo already do.
+fn en_dash_range(pages: &str) -> String {
+    let mut out = String::with_capacity(pages.len());
+    let mut chars = pages.chars().peekable();
+    let mut previous: Option<char> = None;
+    while let Some(ch) = chars.next() {
+        let between_digits = ch == '-'
+            && previous.is_some_and(|p| p.is_ascii_digit())
+            && chars.peek().is_some_and(char::is_ascii_digit);
+        out.push(if between_digits { '–' } else { ch });
+        previous = Some(ch);
+    }
+    out
 }
 
 /// A stable name for an entry type, for the `type` metadata key.
@@ -453,5 +507,90 @@ mod tests {
     fn test_stub_escapes_quotes_in_metadata() {
         let escaped = escape(r#"a "quoted" \ backslash"#);
         assert_eq!(escaped, r#"a \"quoted\" \\ backslash"#);
+    }
+
+    const JOURNAL: &str = r#"
+@article{knuth1984literate,
+  title     = {Literate Programming},
+  author    = {Knuth, Donald E.},
+  journal   = {The Computer Journal},
+  volume    = {27},
+  number    = {2},
+  pages     = {97--111},
+  year      = {1984},
+  publisher = {Oxford University Press},
+}
+
+@book{book1999,
+  title     = {A Book},
+  author    = {Writer, Ann},
+  publisher = {A Press},
+  year      = {1999},
+}
+
+@inproceedings{proc2001,
+  title     = {A Paper},
+  author    = {Speaker, Bo},
+  booktitle = {Proceedings of Somewhere},
+  pages     = {5--9},
+  year      = {2001},
+}
+"#;
+
+    fn line(key: &str) -> String {
+        let library = hayagriva::io::from_biblatex_str(JOURNAL).expect("sample parses");
+        let entry = library.get(key).expect("entry");
+        reference_line(entry).expect("a line")
+    }
+
+    /// Hayagriva files a journal article's volume and issue on the periodical
+    /// parent, so reading them off the entry found them on a book and lost them
+    /// on the article — the one entry type where they matter.
+    #[test]
+    fn test_a_journal_article_keeps_its_volume_and_issue() {
+        assert_eq!(
+            line("knuth1984literate"),
+            "_The Computer Journal_ *27*(2), 97–111."
+        );
+    }
+
+    #[test]
+    fn test_a_book_names_its_publisher_and_nothing_it_does_not_have() {
+        assert_eq!(line("book1999"), "A Press.");
+    }
+
+    #[test]
+    fn test_proceedings_read_as_a_container_with_pages() {
+        assert_eq!(line("proc2001"), "_Proceedings of Somewhere_, 5–9.");
+    }
+
+    /// The year is in the title and in the date column already; a third copy at
+    /// the end of the line was the most visible redundancy on a stub page.
+    #[test]
+    fn test_the_reference_line_does_not_repeat_the_year() {
+        for key in ["knuth1984literate", "book1999", "proc2001"] {
+            let line = line(key);
+            assert!(!line.contains("1984"), "{line}");
+            assert!(!line.contains("1999"), "{line}");
+            assert!(!line.contains("2001"), "{line}");
+        }
+    }
+
+    #[test]
+    fn test_en_dash_range_only_touches_a_hyphen_between_digits() {
+        assert_eq!(en_dash_range("97-111"), "97–111");
+        assert_eq!(en_dash_range("97"), "97");
+        assert_eq!(en_dash_range("A-1"), "A-1");
+        assert_eq!(en_dash_range("12-"), "12-");
+    }
+
+    /// An entry with no container, publisher, volume or pages has no line to
+    /// write, and an empty paragraph under the title is worse than none.
+    #[test]
+    fn test_an_entry_with_no_detail_has_no_line() {
+        let library =
+            hayagriva::io::from_biblatex_str("@misc{bare, title = {Bare}, year = {2020}}")
+                .expect("parses");
+        assert!(reference_line(library.get("bare").expect("entry")).is_none());
     }
 }
