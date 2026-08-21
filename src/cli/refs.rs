@@ -191,7 +191,7 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
             continue;
         }
 
-        let path = environment::trees_dir().join(format!("{target}.{}", Ext::Typ));
+        let path = stub_path(*target);
         let existing = if path.exists() {
             Some(
                 std::fs::read_to_string(&path)
@@ -382,7 +382,6 @@ pub fn export(command: &RefsExportCommand) -> eyre::Result<()> {
 }
 
 /// Where a stub for `slug` would be written.
-#[allow(dead_code)]
 fn stub_path(slug: Slug) -> Utf8PathBuf {
     environment::trees_dir().join(format!("{slug}.{}", Ext::Typ))
 }
