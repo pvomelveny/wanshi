@@ -7,6 +7,7 @@ pub mod check;
 pub mod init;
 pub mod new;
 pub mod output;
+pub mod refs;
 pub mod serve;
 pub mod snip;
 pub mod upgrade;

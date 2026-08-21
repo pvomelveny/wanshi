@@ -90,6 +90,26 @@ header-keys = ["date", "author", "see-also"]
 - `search-content`: index note body text as well as titles. See [Search](#search) below.
 - `header-keys`: metadata keys printed beneath a title, in the order listed. Defaults to `["date", "author", "see-also"]` — a date, a name, and a link the reader can follow. Display is **opt-in**: any other key is still preserved in `wanshi.json` and still usable for sorting and queries, it is simply not shown. Custom keys render as bare values with no key name, so an unexplained one reads as a stray word rather than as information. Taxon and title are always shown and are not affected. Footer and embedded entries show only the date regardless, since their other keys belong to the note being linked, not to the page doing the linking.
 
+## `[refs]`
+
+```toml
+[refs]
+bibliography = "trees/_bib/refs.bib"
+dir = "refs"
+```
+
+- `bibliography`: the works `wanshi refs sync` reads, resolved against the
+  project root. A BibTeX/BibLaTeX `.bib` or a Hayagriva `.yaml`/`.yml` —
+  the same pair Typst's own `bibliography()` accepts, so one file can serve
+  both. The default sits under a `_` directory inside the source tree, which is
+  skipped by section discovery and so can never become a page, while remaining
+  reachable from a note as `#bibliography("/_bib/refs.bib")`.
+- `dir`: slug prefix where generated reference notes live. One flat directory,
+  not a pattern.
+
+See [Citing Papers and Books](links-and-references.md#citing-papers-and-books)
+for the workflow.
+
 ## `[serve]`
 
 ```toml

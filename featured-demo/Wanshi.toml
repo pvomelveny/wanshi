@@ -45,6 +45,14 @@ search-content = true
 # `guide/metadata` can demonstrate a key that is not shown by default.
 header-keys = ["date", "author", "see-also", "status"]
 
+[refs]
+# `wanshi refs sync` reads this and writes a note for every work cited under
+# `dir` that does not have one yet. The file sits under a `_` directory so
+# section discovery skips it, while staying reachable from a note as
+# `#bibliography("/_bib/refs.bib")` should one want Typst's own citations.
+bibliography = "trees/_bib/refs.bib"
+dir = "refs"
+
 [serve]
 edit = "vscode://file/"
 output = "./.cache/publish"

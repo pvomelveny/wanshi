@@ -9,6 +9,7 @@ wanshi commands accept the usual `--help` flag. Most commands also have visible 
 | `wanshi build` | `b` | Compile the site to HTML |
 | `wanshi check` | `c` | Validate sections and graph without writing output |
 | `wanshi serve` | `s` | Preview locally with watch and live reload |
+| `wanshi refs` | `r` | Generate reference notes, or collect a bibliography |
 | `wanshi snip` | — | Generate VS Code snippet files |
 | `wanshi upgrade` | `u` | Upgrade config shape and sync the Typst library |
 
@@ -143,6 +144,47 @@ rebuild.
 
 `reload` is the path of the live-reload marker file, which is touched on every
 rebuild — a tool can watch it instead of parsing events.
+
+## `wanshi refs`
+
+Bibliographic references: generating notes for cited works, and collecting them
+back out for a paper. Configured by [`[refs]`](configuration.md#refs).
+
+```sh
+wanshi refs sync
+wanshi refs export [--from <slug-prefix>]
+```
+
+Aliases: `wanshi r`, and `s` / `e` for the two subcommands.
+
+### `refs sync`
+
+Writes a note for every work cited under `[refs].dir` that does not have one,
+reading `[refs].bibliography`. Also refreshes notes it generated earlier, so an
+upstream correction reaches the forest; a generated note carries a marker
+comment, and deleting that marker takes the file over by hand. Content that has
+not changed is not rewritten.
+
+Options:
+
+- `--config <path>`, short `-c`: configuration file.
+- `--dry-run`: report what would be written without writing it.
+
+### `refs export`
+
+Prints the bibliography that a set of notes cites.
+
+Output matches the bibliography's own format: BibTeX entries are copied
+verbatim, Hayagriva is re-serialised from its native model. Both are lossless.
+
+Options:
+
+- `--config <path>`, short `-c`: configuration file.
+- `--from <slug-prefix>`: only consider sections whose slug starts with this.
+  Omit for the whole forest.
+- `--format <bib|yaml>`: override the output format. Only `bib` → `yaml` is
+  possible; hayagriva reads BibTeX but cannot write it, so the reverse is an
+  error rather than a lossy conversion.
 
 ## `wanshi snip`
 

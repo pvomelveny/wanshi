@@ -16,6 +16,7 @@ mod html_text;
 mod ordered_map;
 mod path_utils;
 mod recorder;
+mod refs;
 mod slug;
 #[cfg(test)]
 mod test_io;
@@ -34,6 +35,7 @@ use crate::cli::{
     check::CheckCommand,
     init::InitCommand,
     new::{NewCommand, NewCommandCli},
+    refs::{RefsCommand, RefsCommandCli},
     serve::ServeCommand,
     snip::SnipCommand,
     upgrade::UpgradeCommand,
@@ -79,6 +81,13 @@ enum Command {
     #[command(visible_alias = "s")]
     Serve(ServeCommand),
 
+    /// Manage bibliographic references.
+    ///
+    /// `sync` generates a note for every cited work that lacks one; `export`
+    /// prints the bibliography a set of notes cites.
+    #[command(visible_alias = "r")]
+    Refs(RefsCommandCli),
+
     /// Generate VSCode style snippets file.
     #[command()]
     Snip(SnipCommand),
@@ -101,6 +110,10 @@ fn main() -> eyre::Result<()> {
         Command::Serve(command) => crate::cli::serve::serve(command)?,
         Command::Build(command) => crate::cli::build::build(command)?,
         Command::Check(command) => crate::cli::check::check(command)?,
+        Command::Refs(RefsCommandCli { command }) => match command {
+            RefsCommand::Sync(command) => crate::cli::refs::sync(command)?,
+            RefsCommand::Export(command) => crate::cli::refs::export(command)?,
+        },
         Command::Snip(command) => crate::cli::snip::snip(command)?,
         Command::Upgrade(command) => crate::cli::upgrade::upgrade(command)?,
     };

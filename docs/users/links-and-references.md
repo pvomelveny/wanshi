@@ -210,6 +210,102 @@ what `featured-demo` does.
 `"references": "false"` on a page suppresses its References footer without
 changing what the graph records.
 
+### Citing Papers and Books
+
+The notes above are hand-written, which is fine for a handful of works and
+tedious past that — bibliographic detail gets retyped, and drifts from whatever
+you keep it in. `wanshi refs` reads a bibliography instead and writes the notes
+for you.
+
+Point the configuration at a bibliography:
+
+```toml
+[refs]
+bibliography = "trees/_bib/refs.bib"   # .bib, .yaml or .yml
+dir = "refs"                           # where generated notes live
+```
+
+Cite a work by its citation key, as an ordinary link:
+
+```typst
+Influence theory begins with #local("/refs/kkl1988", text: [KKL88]).
+```
+
+`wanshi check` will report that as a dangling link, because the note does not
+exist yet, and point you at the fix. Run it:
+
+```sh
+wanshi refs sync
+```
+
+That writes `trees/refs/kkl1988.typ` from the bibliography entry — title,
+authors, year, container, DOI, and the citation key — with a `reference` taxon,
+so it behaves exactly like the hand-written note above. Nothing else changes:
+the citation is a link, so the citing note gets a References footer and the work
+collects a backlink from every note that cites it.
+
+**Notes are generated on demand.** Only works you have actually cited get a
+note, so a bibliography of hundreds does not become hundreds of pages.
+
+#### Where the bibliography lives
+
+Anywhere, but inside the source tree under a `_` directory is the useful place.
+Discovery skips `_`-prefixed directories and only `.typ`/`.typst` are section
+extensions, so the file can never become a page — while `[build].typst-root` is
+the tree, so a note that wants Typst's own citation system can reach the same
+file:
+
+```typst
+#bibliography("/_bib/refs.bib")
+```
+
+That is worth keeping open for a note that is a draft of paper prose. It is not
+how you cite across the forest, though: each note compiles as its own document,
+so a Typst bibliography is per-note and invisible to the graph.
+
+#### Keeping notes and bibliography in step
+
+`refs sync` also refreshes notes it generated earlier, so correcting a title
+upstream reaches the forest on the next run. It knows which are its own by a
+marker comment at the top of each generated file:
+
+- **Delete the marker** and the file is yours; sync will say so and leave it
+  alone from then on.
+- Identical content is never rewritten, so a re-run touches nothing and a
+  running `wanshi serve` does not rebuild over it.
+
+Your own thinking about a work belongs in an ordinary note that links to the
+generated one, not in the generated one itself. The work's backlinks then
+collect every note you have written about it, which is the view a generated stub
+cannot give you.
+
+#### Collecting a bibliography for a paper
+
+The graph knows which works a body of notes depends on, which is the question a
+reference manager cannot answer:
+
+```sh
+wanshi refs export --from boolean/ > paper.bib
+```
+
+That prints the entries cited by every note whose slug starts with `boolean/`.
+Omit `--from` for the whole forest.
+
+Output matches the bibliography's own format, which is the lossless choice both
+ways. A BibTeX source is copied **verbatim**, so brace protection like
+`{Boolean}` and any field wanshi does not model survive intact. A Hayagriva
+source is re-serialised, which is lossless because Hayagriva is the format this
+is parsed into anyway. `--format` overrides — but only from BibTeX to Hayagriva,
+since hayagriva reads BibTeX and does not write it. Asking for the impossible
+direction is an error rather than a lossy guess.
+
+#### One directory, flat
+
+Generated notes sit directly in `[refs].dir`, never nested by topic. A citation
+key identifies one work, so a work gets one page: filing it under the topic that
+cites it would force a choice the first time a second topic cited the same work.
+The topical view already exists — it is that work's backlinks.
+
 ## Backlinks
 
 A **backlink** is the reverse edge: page A links to page B, so B lists A. They

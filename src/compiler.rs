@@ -9,6 +9,7 @@ pub mod counter;
 pub mod custom_tag;
 mod heading_sections;
 mod incremental;
+pub mod links;
 mod output_manifest;
 mod query;
 mod rss;

@@ -4,6 +4,7 @@
 
 pub mod build;
 pub mod publish;
+pub mod refs;
 pub mod serve;
 pub mod text;
 pub mod toc;
@@ -12,6 +13,7 @@ pub mod wanshi;
 use build::Build;
 use camino::Utf8PathBuf;
 use publish::Publish;
+use refs::Refs;
 use serde::{Deserialize, Serialize};
 use serve::Serve;
 use text::Text;
@@ -39,6 +41,9 @@ pub struct Config {
 
     #[serde(default)]
     pub publish: Publish,
+
+    #[serde(default)]
+    pub refs: Refs,
 }
 
 /// Try to find toml file in the current directory or the parent directory.
