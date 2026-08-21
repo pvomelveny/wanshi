@@ -139,16 +139,23 @@ fn extract_biblatex_entry<'a>(raw: &'a str, key: &str) -> Option<&'a str> {
 
 /// Turn a citation key into a slug segment.
 ///
-/// Keys are chosen by the reference manager and can carry characters a URL
-/// should not — `:` and `+` appear in Better BibTeX keys. The original is kept
-/// in the stub's `citekey` metadata, which is what `refs export` joins on, so
-/// this only has to be stable and legible.
+/// **Case is preserved.** A citation key is what the author reads in their
+/// reference manager and types into `#local("/refs/…")`, so the slug has to be
+/// the key itself wherever it legally can be. Lowercasing looked tidier and was
+/// wrong: Better BibTeX generates keys like `odonnellAnalysisBooleanFunctions2021`,
+/// and folding the case meant the link an author naturally wrote never matched
+/// the file generated for it — the citation stayed dangling through a
+/// successful sync.
+///
+/// Only characters that cannot sit in a path segment are replaced. The original
+/// key is kept in the stub's `citekey` metadata regardless, since that is what
+/// `refs export` joins on.
 pub fn slug_segment(key: &str) -> String {
     let mut out = String::with_capacity(key.len());
     let mut last_was_dash = false;
     for ch in key.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            out.push(ch);
             last_was_dash = false;
         } else if !last_was_dash && !out.is_empty() {
             out.push('-');
@@ -367,11 +374,19 @@ mod tests {
     }
 
     #[test]
-    fn test_slug_segment_sanitises_and_lowercases() {
+    fn test_slug_segment_preserves_case_and_replaces_unsafe_characters() {
+        // Case must survive: a Better BibTeX key is what the author types into
+        // `#local("/refs/…")`, and folding it would leave that link dangling
+        // through a successful sync.
+        assert_eq!(
+            slug_segment("odonnellAnalysisBooleanFunctions2021"),
+            "odonnellAnalysisBooleanFunctions2021"
+        );
         assert_eq!(slug_segment("kkl1988"), "kkl1988");
-        assert_eq!(slug_segment("Kahn:1988aa"), "kahn-1988aa");
+        assert_eq!(slug_segment("Kahn:1988aa"), "Kahn-1988aa");
         assert_eq!(slug_segment("a++b"), "a-b");
         assert_eq!(slug_segment("--trim--"), "trim");
+        assert_eq!(slug_segment("with_underscore"), "with_underscore");
     }
 
     #[test]
