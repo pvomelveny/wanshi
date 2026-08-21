@@ -241,12 +241,15 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
                 std::fs::create_dir_all(parent)
                     .wrap_err_with(|| format!("failed to create `{parent}`"))?;
             }
-            std::fs::write(&path, &source)
-                .wrap_err_with(|| format!("failed to write `{path}`"))?;
+            std::fs::write(&path, &source).wrap_err_with(|| format!("failed to write `{path}`"))?;
         }
     }
 
-    let verb = if command.dry_run { "would write" } else { "wrote" };
+    let verb = if command.dry_run {
+        "would write"
+    } else {
+        "wrote"
+    };
     for path in &created {
         color_print::cprintln!("<g>[refs]</> {} {}", verb, path);
     }

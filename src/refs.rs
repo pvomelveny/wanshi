@@ -56,12 +56,20 @@ impl Bibliography {
                         .join("\n");
                     eyre!("failed to parse BibTeX bibliography `{path}`:\n{detail}")
                 })?;
-                Ok(Self { library, raw, is_biblatex: true })
+                Ok(Self {
+                    library,
+                    raw,
+                    is_biblatex: true,
+                })
             }
             Some("yaml") | Some("yml") => {
                 let library = hayagriva::io::from_yaml_str(&raw)
                     .wrap_err_with(|| format!("failed to parse Hayagriva bibliography `{path}`"))?;
-                Ok(Self { library, raw, is_biblatex: false })
+                Ok(Self {
+                    library,
+                    raw,
+                    is_biblatex: false,
+                })
             }
             other => Err(eyre!(
                 "unsupported bibliography extension `{}` in `{}` (expected `bib`, `yaml` or `yml`)",
@@ -402,7 +410,10 @@ mod tests {
     #[test]
     fn test_extract_biblatex_entry_handles_nested_braces() {
         let entry = extract_biblatex_entry(SAMPLE, "odonnell2014").expect("found");
-        assert!(entry.contains("{Boolean}"), "nested braces survive: {entry}");
+        assert!(
+            entry.contains("{Boolean}"),
+            "nested braces survive: {entry}"
+        );
         assert!(entry.ends_with('}'));
     }
 

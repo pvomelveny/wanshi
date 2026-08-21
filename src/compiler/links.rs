@@ -66,8 +66,11 @@ pub fn dangling_local_links(shallows: &HashMap<Slug, UnresolvedSection>) -> Vec<
     }
 
     dangling.sort_by(|a, b| {
-        (a.from.as_str(), a.target.as_str(), &a.url)
-            .cmp(&(b.from.as_str(), b.target.as_str(), &b.url))
+        (a.from.as_str(), a.target.as_str(), &a.url).cmp(&(
+            b.from.as_str(),
+            b.target.as_str(),
+            &b.url,
+        ))
     });
     dangling
 }
