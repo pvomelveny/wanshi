@@ -240,28 +240,36 @@ wanshi refs sync
 
 That writes `trees/refs/kkl1988.typ` from the bibliography entry with a
 `reference` taxon, so it behaves exactly like the hand-written note above. The
-page carries where the work appeared and how to reach it:
+body is the whole citation, as it would appear in a bibliography:
 
 ```
-Kahn, Kalai & Linial 1988 — The influence of variables on Boolean functions
+Reference. Kahn, Kalai & Linial 1988 — The influence of variables on Boolean functions
 1988   Jeff Kahn, Gil Kalai, Nathan Linial
 
-_Proc. 29th FOCS_, pp. 68–80.
+Jeff Kahn, Gil Kalai and Nathan Linial. "The influence of variables on Boolean
+functions". _Proc. 29th FOCS_, pp. 68–80, 1988.
 
 doi:10.1109/SFCS.1988.21923 · ieee.org
 ```
 
-Volume, issue, pages, editors, publisher and location are used when present, and
-an entry with none of them still names what kind of work it is rather than
-rendering an empty line. **Every link is kept** — a DOI does not suppress a
-separate URL, since for most libraries the URL is the only address on file. An
-arXiv posting is recognised in either form (the abs URL, or the DataCite
-`10.48550/arXiv.…` DOI) and rendered once as `arXiv:2105.10386`, because both
-resolve to the same page and the identifier is what a reader recognises. Other
-URLs are labelled by host, since a publisher link runs to 90 opaque characters
-and says nothing in full. Nothing else changes:
-the citation is a link, so the citing note gets a References footer and the work
-collects a backlink from every note that cites it.
+A stub's metadata holds far more than a page shows — `[build].header-keys`
+prints a couple of values under the title and the rest stays in `wanshi.json` —
+so a page standing for a work would otherwise display almost nothing about it.
+Writing the citation into the body is what makes the work visible, and gives you
+something to paste into a bibliography.
+
+Titles follow the convention every reference style shares: a work published
+*inside* another is quoted and its container italicised, a work that is itself
+the publication is italicised. Volume, issue, pages, editors, publisher and
+location are used when present, and an entry with none of them still names what
+kind of work it is rather than trailing off after the title.
+
+**Every link is kept** — a DOI does not suppress a separate URL, since for most
+libraries the URL is the only address on file. An arXiv posting is recognised in
+either form (the abs URL, or the DataCite `10.48550/arXiv.…` DOI) and rendered
+once as `arXiv:2105.10386`, because both resolve to the same page and the
+identifier is what a reader recognises. Other URLs are labelled by host, since a
+publisher link runs to 90 opaque characters and says nothing in full.
 
 **Notes are generated on demand.** Only works you have actually cited get a
 note, so a bibliography of hundreds does not become hundreds of pages.

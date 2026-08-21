@@ -17,6 +17,6 @@
   "parent": "refs/index",
 ))
 
-_The Computer Journal_ *27*(2), pp. 97–111.
+Donald E. Knuth. "Literate Programming". _The Computer Journal_ *27*(2), pp. 97–111, 1984.
 
 #external("https://doi.org/10.1093/comjnl/27.2.97", "doi:10.1093/comjnl/27.2.97")

@@ -291,7 +291,7 @@ pub fn stub_source(entry: &Entry, parent_slug: &str) -> String {
         .map(|(key, value)| format!("  \"{}\": \"{}\",\n", key, escape(value)))
         .collect::<String>();
 
-    let mut body = reference_line(entry);
+    let mut body = full_reference(entry);
     body.push('\n');
 
     // Links get their own line, separated by a middot: they are a row of
@@ -427,14 +427,18 @@ fn work_links(entry: &Entry) -> Vec<(String, String)> {
     links
 }
 
-/// The entry type as a display word: `Report`, `Thesis`, `Book chapter`.
-fn type_label(entry: &Entry) -> String {
-    let name = entry_type_name(entry.entry_type());
-    let mut chars = name.chars();
+/// Upper-case the first character, leaving the rest alone.
+fn capitalize_first(value: &str) -> String {
+    let mut chars = value.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => name,
+        None => String::new(),
     }
+}
+
+/// The entry type as a display word: `Report`, `Thesis`, `Chapter`.
+fn type_label(entry: &Entry) -> String {
+    capitalize_first(&entry_type_name(entry.entry_type()))
 }
 
 /// Where the work appeared, as one sentence.
@@ -444,23 +448,47 @@ fn type_label(entry: &Entry) -> String {
 /// preprint -- so the works least likely to be recognised from their title
 /// alone were exactly the ones whose stub said nothing at all. Naming the kind
 /// of thing it is beats an empty line.
-fn reference_line(entry: &Entry) -> String {
-    // Comma-separated clauses describing the work's place of publication.
-    let mut clauses: Vec<String> = Vec::new();
-
-    let container = container(entry);
-
-    // "In" belongs to a work bound inside a larger one -- a chapter, a paper in
-    // a proceedings -- and not to a journal article, which is cited as the
-    // periodical and volume alone. The distinction is the *parent's* type, not
-    // the entry's: hayagriva files both `@article` and `@inproceedings` as
-    // `Article`, and they differ only in what they sit inside.
-    let bound_inside = entry.parents().iter().any(|parent| {
+/// Whether the work is bound inside a larger one.
+///
+/// "In" belongs to a chapter or a paper in a proceedings, and not to a journal
+/// article, which is cited as the periodical and volume alone. The distinction
+/// is the *parent's* type, not the entry's: hayagriva files both `@article` and
+/// `@inproceedings` as `Article`, and they differ only in what they sit inside.
+fn bound_inside(entry: &Entry) -> bool {
+    entry.parents().iter().any(|parent| {
         matches!(
             parent.entry_type(),
             EntryType::Proceedings | EntryType::Book | EntryType::Anthology | EntryType::Reference
         )
-    });
+    })
+}
+
+/// The work's own title, marked up by whether it stands alone.
+///
+/// The convention every reference style shares: a work published *inside*
+/// another is quoted and its container italicised, while a work that is itself
+/// the publication is italicised. So an article is `"Title." _Journal_` and a
+/// book is `_Title_` -- which is also what tells a reader, at a glance, which
+/// kind of thing they are looking at.
+fn title_markup(entry: &Entry) -> Option<String> {
+    let title = escape_markup(&entry.title()?.to_string());
+    Some(if container(entry).is_some() {
+        format!("\"{title}\"")
+    } else {
+        format!("_{title}_")
+    })
+}
+
+/// Where the work appeared: venue, volume, pages, imprint.
+///
+/// Empty when the entry records none of it. The caller decides what to do with
+/// that -- [`full_reference`] falls back to naming the kind of work, so a
+/// thesis or preprint still reads as a citation rather than trailing off.
+fn publication_details(entry: &Entry) -> String {
+    // Comma-separated clauses describing the work's place of publication.
+    let mut clauses: Vec<String> = Vec::new();
+
+    let container = container(entry);
 
     // A publisher's name already says "this is a book", so labelling it as one
     // too reads as filler: "Book. Cambridge University Press, Cambridge."
@@ -471,17 +499,22 @@ fn reference_line(entry: &Entry) -> String {
     let implied_by_imprint = named_publisher && matches!(entry.entry_type(), EntryType::Book);
 
     // The opening clause names the venue, or failing that the kind of work.
+    // Something has to open it: the clauses that follow are lowercase
+    // continuations, so without an opening the citation reads
+    // "_Whitney Numbers_. ed. Neil White" -- a fragment starting a sentence.
     let mut opening = match &container {
-        Some(title) if bound_inside => format!("In _{}_", escape_markup(title)),
+        Some(title) if bound_inside(entry) => format!("In _{}_", escape_markup(title)),
         Some(title) => format!("_{}_", escape_markup(title)),
         None if implied_by_imprint => String::new(),
         None => type_label(entry),
     };
+
     // A volume number modifies a named venue -- `_Annals_ *192*(3)` -- so with
     // no venue to attach to it has to say what it is, or the line opens on a
     // bare emphasised number: `*221*, ed. Volker Kaibel…`.
     let volume = volume(entry);
     let issue = issue(entry);
+    let opening_was_empty = opening.is_empty();
     if opening.is_empty() {
         if let Some(volume) = &volume {
             clauses.push(format!("vol. {volume}"));
@@ -509,12 +542,22 @@ fn reference_line(entry: &Entry) -> String {
         clauses.push(format!("pp. {}", en_dash_range(&pages.to_string())));
     }
 
+    // With no venue to open on, the first clause begins the sentence after the
+    // title, and `vol.`/`ed.` are lower case: "_Convex Polytopes_. vol. 221".
+    if opening_was_empty {
+        if let Some(first) = clauses.first_mut() {
+            *first = capitalize_first(first);
+        }
+    }
+
     let mut line = clauses.join(", ");
 
     // The publisher opens its own sentence: it modifies the work, not the
     // volume-and-pages clause it would otherwise attach to.
     let publisher = entry.publisher();
-    let name = publisher.and_then(|publisher| publisher.name()).map(|name| name.to_string());
+    let name = publisher
+        .and_then(|publisher| publisher.name())
+        .map(|name| name.to_string());
     let location = publisher
         .and_then(|publisher| publisher.location())
         .map(|location| location.to_string());
@@ -525,32 +568,84 @@ fn reference_line(entry: &Entry) -> String {
         (None, None) => None,
     };
     if let Some(imprint) = imprint {
+        let imprint = escape_markup(&imprint);
         if line.is_empty() {
-            line = escape_markup(&imprint);
+            line = imprint;
+        } else if clauses.len() > 1 {
+            // Enough has accumulated that another comma would bury the
+            // publisher inside the volume-and-pages clause it does not belong
+            // to: "…, ed. Neil White, pp. 139–160. Cambridge University Press".
+            line.push_str(&format!(". {imprint}"));
         } else {
-            line.push_str(&format!(". {}", escape_markup(&imprint)));
+            // A lone clause is just the kind of work, and "Thesis. San
+            // Francisco" reads as two fragments rather than one citation.
+            line.push_str(&format!(", {imprint}"));
         }
     }
 
-    format!("{line}.")
+    line
+}
+
+/// The whole citation, as it would appear in a bibliography.
+///
+/// The stub's metadata block holds author, title, year, venue and identifiers,
+/// and almost none of it reaches the reader: `[build].header-keys` prints a
+/// couple of values under the title and the rest stays in `wanshi.json`. A page
+/// standing for a work should show the work. So the body is a complete
+/// reference -- the thing you would paste into a bibliography -- rather than a
+/// fragment that assumes the heading beside it.
+fn full_reference(entry: &Entry) -> String {
+    let mut sentences: Vec<String> = Vec::new();
+
+    if let Some(authors) = author_citation(entry) {
+        sentences.push(authors);
+    }
+    if let Some(title) = title_markup(entry) {
+        sentences.push(title);
+    }
+
+    // Naming the kind of work is the fallback when nothing records where it
+    // appeared -- every thesis, report and preprint -- so the citation still
+    // says what it is rather than ending after the title.
+    let mut tail = publication_details(entry);
+    if tail.is_empty() {
+        tail = type_label(entry);
+    }
+
+    // The year closes the citation, attached to the venue clause rather than
+    // standing as its own sentence.
+    if let Some(year) = year(entry) {
+        tail.push_str(&format!(", {year}"));
+    }
+    sentences.push(tail);
+
+    format!("{}.", sentences.join(". "))
+}
+
+/// Join names the way a citation reads them: the last one after "and".
+fn name_list(people: &[hayagriva::types::Person]) -> Option<String> {
+    let names: Vec<String> = people
+        .iter()
+        .map(|person| person.given_first(false))
+        .collect();
+    match names.as_slice() {
+        [] => None,
+        [one] => Some(one.clone()),
+        [first, second] => Some(format!("{first} and {second}")),
+        [rest @ .., last] => Some(format!("{} and {}", rest.join(", "), last)),
+    }
 }
 
 /// Editors, given-name first, as a readable list.
 fn editor_list(entry: &Entry) -> Option<String> {
-    let editors = entry.editors()?;
-    if editors.is_empty() {
-        return None;
-    }
-    let names: Vec<String> = editors
-        .iter()
-        .map(|person| person.given_first(false))
-        .collect();
-    Some(match names.as_slice() {
-        [one] => one.clone(),
-        [first, second] => format!("{first} and {second}"),
-        [rest @ .., last] => format!("{} and {}", rest.join(", "), last),
-        [] => unreachable!("checked non-empty above"),
-    })
+    name_list(entry.editors()?)
+}
+
+/// Authors as a citation reads them, which is not how the `author` metadata
+/// field lists them: that stays a plain comma-separated list so anything
+/// filtering on it can split cleanly.
+fn author_citation(entry: &Entry) -> Option<String> {
+    name_list(entry.authors()?)
 }
 
 /// Neutralise Typst markup characters in text that is emitted as content.
@@ -751,7 +846,7 @@ mod tests {
     fn line(key: &str) -> String {
         let library = hayagriva::io::from_biblatex_str(JOURNAL).expect("sample parses");
         let entry = library.get(key).expect("entry");
-        reference_line(entry)
+        full_reference(entry)
     }
 
     /// Hayagriva files a journal article's volume and issue on the periodical
@@ -761,31 +856,43 @@ mod tests {
     fn test_a_journal_article_keeps_its_volume_and_issue() {
         assert_eq!(
             line("knuth1984literate"),
-            "_The Computer Journal_ *27*(2), pp. 97–111."
+            "Donald E. Knuth. \"Literate Programming\". \
+             _The Computer Journal_ *27*(2), pp. 97–111, 1984."
         );
     }
 
     #[test]
     fn test_a_book_names_its_publisher_and_nothing_it_does_not_have() {
-        // "Book. A Press." said the same thing twice.
-        assert_eq!(line("book1999"), "A Press.");
+        assert_eq!(line("book1999"), "Ann Writer. _A Book_. A Press, 1999.");
     }
 
     #[test]
     fn test_proceedings_read_as_a_container_with_pages() {
-        assert_eq!(line("proc2001"), "In _Proceedings of Somewhere_, pp. 5–9.");
+        assert_eq!(
+            line("proc2001"),
+            "Bo Speaker. \"A Paper\". In _Proceedings of Somewhere_, pp. 5–9, 2001."
+        );
     }
 
-    /// The year is in the title and in the date column already; a third copy at
-    /// the end of the line was the most visible redundancy on a stub page.
+    /// A citation ends in its year. The body used to omit it to avoid repeating
+    /// the heading, which left the reference incomplete -- the body is a whole
+    /// bibliography entry now, not a fragment that leans on the heading.
     #[test]
-    fn test_the_reference_line_does_not_repeat_the_year() {
-        for key in ["knuth1984literate", "book1999", "proc2001"] {
-            let line = line(key);
-            assert!(!line.contains("1984"), "{line}");
-            assert!(!line.contains("1999"), "{line}");
-            assert!(!line.contains("2001"), "{line}");
-        }
+    fn test_the_citation_ends_in_its_year() {
+        assert!(line("knuth1984literate").ends_with("1984."));
+        assert!(line("book1999").ends_with("1999."));
+        assert!(line("proc2001").ends_with("2001."));
+    }
+
+    /// Every reference style quotes a work published inside another and
+    /// italicises the container, while italicising a work that is itself the
+    /// publication. That contrast is what tells a reader which kind of thing
+    /// they are looking at.
+    #[test]
+    fn test_a_contained_work_is_quoted_and_a_standalone_one_italicised() {
+        assert!(line("knuth1984literate").contains("\"Literate Programming\""));
+        assert!(line("knuth1984literate").contains("_The Computer Journal_"));
+        assert!(line("book1999").contains("_A Book_"));
     }
 
     #[test]
@@ -806,8 +913,8 @@ mod tests {
             hayagriva::io::from_biblatex_str("@misc{bare, title = {Bare}, year = {2020}}")
                 .expect("parses");
         assert_eq!(
-            reference_line(library.get("bare").expect("entry")),
-            "Misc."
+            full_reference(library.get("bare").expect("entry")),
+            "_Bare_. Misc, 2020."
         );
     }
 
