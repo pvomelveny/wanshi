@@ -84,15 +84,82 @@ pub fn html_static_css() -> String {
     }
 }
 
+/// CSS length values that can take part in a `calc()`.
+///
+/// `[toc].max-width` also accepts content keywords — `max-content` is what the
+/// featured demo uses — and those can cap an element without being a number the
+/// page layout can reserve space for. Telling the two apart is what decides
+/// whether the configured width can drive the whole column or only the sidebar
+/// inside it.
+fn is_calc_safe_length(value: &str) -> bool {
+    const UNITS: [&str; 16] = [
+        "px", "rem", "em", "ex", "ch", "vw", "vh", "vmin", "vmax", "%", "pt", "pc", "cm", "mm",
+        "in", "q",
+    ];
+    let value = value.trim();
+    if ["calc(", "min(", "max(", "clamp("]
+        .iter()
+        .any(|prefix| value.starts_with(prefix))
+    {
+        return value.ends_with(')');
+    }
+    let lower = value.to_ascii_lowercase();
+    UNITS.iter().any(|unit| {
+        lower
+            .strip_suffix(unit)
+            .is_some_and(|number| !number.is_empty() && number.parse::<f64>().is_ok())
+    })
+}
+
 pub fn html_dynamic_css() -> String {
     let toc_max_width = environment::toc_max_width();
+
+    // `[toc].max-width` has to reach three places that must agree, or the
+    // column and the sidebar inside it disagree and the difference shows as
+    // dead space: the grid track, the sidebar's own cap, and the allowance the
+    // body reserves for the sidebar in its `max-width`. Capping only the
+    // sidebar left the other two at their defaults, so any configured width
+    // below the default — including the default `45ex` itself, and the example
+    // in the configuration reference — rendered a narrow sidebar inside a wide
+    // empty column.
+    //
+    // A content keyword cannot be reserved against, so it keeps the stylesheet
+    // defaults and caps the sidebar alone, which is the old behaviour.
+    //
+    // Note which rule gets the value in each case, and that it is never both.
+    // A font-relative unit resolves against the element it is written on, and
+    // `nav#toc` sets its own `font-size`, so the very same `45ex` is 351px on
+    // the grid and 316px on the sidebar — the second cap would reintroduce a
+    // sliver of the gap this is here to close. When the track is bounded the
+    // sidebar needs no cap at all: it is `width: 100%` of a track that already
+    // stops where it should.
+    let (configured_width, sidebar_cap) = if is_calc_safe_length(&toc_max_width) {
+        (
+            format!(
+                "\n  :root body {{ --toc-max-width: {toc_max_width}; --toc-allowance: {toc_max_width}; }}"
+            ),
+            String::new(),
+        )
+    } else {
+        (
+            String::new(),
+            format!("\n  nav#toc {{ max-width: {toc_max_width}; }}"),
+        )
+    };
+
     // The sidebar track is `minmax(0, …)` so it can give ground when the window
     // is not wide enough for both columns at full size. As a fixed track it
     // kept its full width and pushed itself past the edge of the window, where
     // entries were clipped rather than wrapped. The article track stays fixed,
     // which is what gives it priority over the sidebar as space runs out.
+    //
+    // Both placements bound the sidebar the same way. A left sidebar used to be
+    // `max-content`, which shrink-wraps to the longest entry — so a page with a
+    // short outline got a narrow track while the body went on reserving the
+    // full allowance, and the leftover sat between the article and the edge:
+    // 215px of sidebar against 345px of nothing on the demo's index page.
     let grid_columns_value = if environment::is_toc_left() {
-        "minmax(0, max-content) var(--article-max-width)"
+        "minmax(0, var(--toc-max-width)) var(--article-max-width)"
     } else {
         "var(--article-max-width) minmax(0, var(--toc-max-width))"
     };
@@ -103,9 +170,8 @@ pub fn html_dynamic_css() -> String {
     };
 
     let grid_wrapper = format!(
-        r#"@media only screen and (min-width: 1000px) {{
-  #grid-wrapper {{ grid-template-columns: {grid_columns_value}; }}
-  nav#toc {{ max-width: {toc_max_width}; }}
+        r#"@media only screen and (min-width: 1000px) {{{configured_width}
+  #grid-wrapper {{ grid-template-columns: {grid_columns_value}; }}{sidebar_cap}
 }}{theme_lock}"#
     );
 
@@ -263,8 +329,122 @@ pub fn html_main_style() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{html_doc, html_dynamic_css, html_live_reload};
+    use super::{html_doc, html_dynamic_css, html_live_reload, is_calc_safe_length};
     use crate::environment;
+
+    #[test]
+    fn test_calc_safe_length_accepts_lengths_and_expressions() {
+        for value in [
+            "35rem",
+            "45ex",
+            "320px",
+            "50%",
+            "0.5em",
+            "60vw",
+            "12pt",
+            "calc(30rem + 2ch)",
+            "min(40rem, 50vw)",
+            "clamp(20rem, 30vw, 40rem)",
+        ] {
+            assert!(is_calc_safe_length(value), "should accept `{value}`");
+        }
+    }
+
+    /// A content keyword caps the sidebar but is not a number the body can
+    /// reserve room against, so it must not reach the layout variables.
+    #[test]
+    fn test_calc_safe_length_rejects_content_keywords() {
+        for value in [
+            "max-content",
+            "min-content",
+            "fit-content",
+            "fit-content(20rem)",
+            "auto",
+            "none",
+            "",
+            "rem",
+        ] {
+            assert!(!is_calc_safe_length(value), "should reject `{value}`");
+        }
+    }
+
+    /// The configured width has to reach the grid track and the body's
+    /// allowance, not only the sidebar's own cap. Setting just the cap is what
+    /// left a narrow outline sitting in a wide empty column.
+    #[test]
+    fn test_a_configured_length_drives_the_track_and_the_allowance() {
+        use std::fs;
+
+        let root = crate::test_io::case_dir("document-toc-width-length");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+        fs::write(
+            config_path.as_std_path(),
+            "[wanshi]\n\n[toc]\nmax-width = \"28rem\"\n",
+        )
+        .unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            environment::init_environment(config_path.clone(), environment::BuildMode::Publish)
+                .unwrap();
+
+            let css = html_dynamic_css();
+            assert!(
+                css.contains("--toc-max-width: 28rem"),
+                "the grid track must follow the config: {css}"
+            );
+            assert!(
+                css.contains("--toc-allowance: 28rem"),
+                "the body's reserved width must follow it too: {css}"
+            );
+            // No second cap on the sidebar: `ex` and `em` resolve against the
+            // element they are written on, and `nav#toc` has its own
+            // `font-size`, so capping it again would shrink it inside the track
+            // the same value just sized.
+            assert!(
+                !css.contains("nav#toc { max-width"),
+                "a bounded track needs no sidebar cap: {css}"
+            );
+        });
+
+        let _ = fs::remove_dir_all(root.as_std_path());
+    }
+
+    /// `max-content` is what the featured demo uses. It still caps the sidebar,
+    /// and still leaves the stylesheet's own track and allowance alone.
+    #[test]
+    fn test_a_content_keyword_caps_only_the_sidebar() {
+        use std::fs;
+
+        let root = crate::test_io::case_dir("document-toc-width-keyword");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+        fs::write(
+            config_path.as_std_path(),
+            "[wanshi]\n\n[toc]\nmax-width = \"max-content\"\n",
+        )
+        .unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            environment::init_environment(config_path.clone(), environment::BuildMode::Publish)
+                .unwrap();
+
+            let css = html_dynamic_css();
+            assert!(css.contains("nav#toc { max-width: max-content; }"), "{css}");
+            // The track still *references* the variable; what must not happen
+            // is the keyword being declared as its value.
+            assert!(
+                !css.contains("--toc-max-width:"),
+                "a keyword must not redefine the track: {css}"
+            );
+            assert!(
+                !css.contains("--toc-allowance:"),
+                "a keyword must not redefine the allowance: {css}"
+            );
+        });
+
+        let _ = fs::remove_dir_all(root.as_std_path());
+    }
 
     #[test]
     fn test_html_doc_places_body_hooks_outside_the_content_grid() {
