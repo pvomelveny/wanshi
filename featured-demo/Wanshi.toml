@@ -9,7 +9,11 @@ themes = []
 placement = "right"
 sticky = true
 mobile-sticky = true
-max-width = "max-content"
+# A length, so the column and the sidebar in it are the same width. With
+# `max-content` the sidebar shrank to its longest entry while the page went on
+# reserving the full column, which left 345px of nothing beside the outline on
+# every short page in this forest.
+max-width = "35rem"
 
 [text]
 edit = "[edit]"
