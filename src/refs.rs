@@ -330,15 +330,6 @@ pub const STUB_MARKER: &str =
      // this work belong in an ordinary note that links here. Delete this\n\
      // comment to take the file over by hand.";
 
-/// One legible line of bibliographic detail beneath the title.
-///
-/// Written the way a reference list writes it — `_The Computer Journal_ *27*(2),
-/// 97–111.` — rather than with `vol.`/`pp.` labels, so a generated stub reads
-/// like the hand-written ones it sits beside in a References footer.
-///
-/// The year is deliberately absent. It is already in the title and again in the
-/// date column, and a third copy at the end of this line was the most visible
-/// thing on the page that did not need to be there.
 /// The arXiv identifier a URL or DOI points at.
 ///
 /// Recognised in both forms because Zotero records both: the abs/pdf URL, and
@@ -436,13 +427,6 @@ fn type_label(entry: &Entry) -> String {
     capitalize_first(&entry_type_name(entry.entry_type()))
 }
 
-/// Where the work appeared, as one sentence.
-///
-/// Always returns something. The previous version returned `None` whenever an
-/// entry had no container, volume or pages, which is every thesis, report and
-/// preprint -- so the works least likely to be recognised from their title
-/// alone were exactly the ones whose stub said nothing at all. Naming the kind
-/// of thing it is beats an empty line.
 /// Whether the work is bound inside a larger one.
 ///
 /// "In" belongs to a chapter or a paper in a proceedings, and not to a journal
