@@ -21,7 +21,7 @@ html {
      past this a line is long enough that the eye loses its place returning to
      the left margin. Between them the column takes a share of the extra width
      instead of leaving a wide window mostly empty. */
-  --article-max-width: clamp(90ex, 50vw, 108ex);
+  --article-max-width: clamp(90ex, 56vw, 116ex);
   --toc-max-width: 90ex;
   --heading-font-family: "Playfair Display", serif;
   --text-font-family: "Source Serif 4", serif;
