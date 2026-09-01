@@ -261,8 +261,11 @@ something to paste into a bibliography.
 Titles follow the convention every reference style shares: a work published
 *inside* another is quoted and its container italicised, a work that is itself
 the publication is italicised. Volume, issue, pages, editors, publisher and
-location are used when present, and an entry with none of them still names what
-kind of work it is rather than trailing off after the title.
+location are used when present, and an entry with none of them names what kind
+of work it is instead — `Thesis`, `Report` — rather than trailing off after the
+title. The exception is an entry typed `@misc`, which is the bibliography's way
+of saying it has not classified the work: there the citation closes on its year,
+since naming the category would only report that the entry declined to.
 
 **Every link is kept** — a DOI does not suppress a separate URL, since for most
 libraries the URL is the only address on file. An arXiv posting is recognised in

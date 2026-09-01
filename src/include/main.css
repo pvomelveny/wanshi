@@ -21,7 +21,7 @@ html {
      past this a line is long enough that the eye loses its place returning to
      the left margin. Between them the column takes a share of the extra width
      instead of leaving a wide window mostly empty. */
-  --article-max-width: clamp(90ex, 50vw, 108ex);
+  --article-max-width: clamp(90ex, 56vw, 116ex);
   --toc-max-width: 90ex;
   --heading-font-family: "Playfair Display", serif;
   --text-font-family: "Source Serif 4", serif;
@@ -684,8 +684,14 @@ body>header {
        meant the article's extra width came straight out of the sidebar, so a
        wider window made the table of contents narrower — and past about
        1500px its entries began wrapping for want of room that the window
-       plainly had. The addend covers the sidebar, the gap, and the gutters. */
-    max-width: calc(var(--article-max-width) + 33rem);
+       plainly had. The addend covers the sidebar, the gap, and the gutters.
+
+       The addend *is* the sidebar's width: the grid gives the article its own
+       track and the sidebar whatever is left, so the difference between this
+       and `--article-max-width` is all the table of contents ever gets, at
+       any window size. At 33rem that was a 29rem column for entries that
+       routinely ran past it. */
+    max-width: calc(var(--article-max-width) + 39rem);
     padding-inline: 2rem;
     box-sizing: border-box;
     transition: ease all 0.2s;
@@ -732,6 +738,12 @@ nav#toc {
      bounds it without stopping a smaller `max-width` from shrink-wrapping it. */
   width: 100%;
   box-sizing: border-box;
+  /* A shade smaller than the prose it indexes. The sidebar is scanned rather
+     than read, and at body size a section title long enough to be worth an
+     outline row was long enough to wrap in the column. The taxon pill inside a
+     row is sized in `em`, so it follows this down and keeps its ratio to the
+     title beside it. */
+  font-size: 0.9rem;
 }
 
 /* A title with no spaces to break at would still push the column wide. */
@@ -772,13 +784,24 @@ nav#toc a.bullet {
      nested sizes above are this times the same 0.75 and 0.62 they always
      were. */
   font-size: 1.2em;
-  margin-left: 0.4rem;
+  /* The bullet gutter is the entire space between the article and the sidebar
+     text: the grid sets no column gap, so these values and `li.entry`'s below
+     are what a reader sees as the gap. Together they held the titles ~43px off
+     the column edge, which is both a visible trench and width the entries
+     needed. Enough is left to keep the mark distinct from the text. */
+  margin-left: 0.15rem;
   /* No right margin: `li.entry` already sets `column-gap`, and the two together
      stood the bullet twice as far from its title as a listing row does with the
      gap alone. */
-  padding-left: 0.2rem;
-  padding-right: 0.2rem;
+  padding-left: 0.1rem;
+  padding-right: 0.1rem;
   text-decoration: none;
+}
+
+/* Tighter than a listing row in the article body, which has a right-aligned
+   date to stay clear of and the width to afford the space. */
+nav#toc li.entry {
+  column-gap: 0.35rem;
 }
 
 li.entry {
