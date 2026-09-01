@@ -372,10 +372,7 @@ fn arxiv_id(value: &str) -> Option<String> {
 /// unreadable while telling a reader nothing. The host is the part that says
 /// where the link goes.
 fn host_label(url: &str) -> String {
-    let without_scheme = url
-        .split_once("://")
-        .map(|(_, rest)| rest)
-        .unwrap_or(url);
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
     let host = without_scheme
         .split(['/', '?', '#'])
         .next()
@@ -416,9 +413,7 @@ fn work_links(entry: &Entry) -> Vec<(String, String)> {
     if let Some(url) = &url {
         let is_the_arxiv_link = arxiv.is_some() && arxiv_id(url).is_some();
         // Zotero sometimes stores the DOI resolver itself as the URL.
-        let is_the_doi_link = doi
-            .as_ref()
-            .is_some_and(|doi| url.contains(doi.as_str()));
+        let is_the_doi_link = doi.as_ref().is_some_and(|doi| url.contains(doi.as_str()));
         if !is_the_arxiv_link && !is_the_doi_link {
             links.push((url.clone(), host_label(url)));
         }
@@ -923,9 +918,18 @@ mod tests {
     /// Listing them separately gave a preprint two links to itself.
     #[test]
     fn test_arxiv_is_recognised_in_both_the_url_and_the_doi() {
-        assert_eq!(arxiv_id("http://arxiv.org/abs/2105.10386").as_deref(), Some("2105.10386"));
-        assert_eq!(arxiv_id("https://arxiv.org/pdf/2105.10386v2").as_deref(), Some("2105.10386"));
-        assert_eq!(arxiv_id("10.48550/arXiv.2105.10386").as_deref(), Some("2105.10386"));
+        assert_eq!(
+            arxiv_id("http://arxiv.org/abs/2105.10386").as_deref(),
+            Some("2105.10386")
+        );
+        assert_eq!(
+            arxiv_id("https://arxiv.org/pdf/2105.10386v2").as_deref(),
+            Some("2105.10386")
+        );
+        assert_eq!(
+            arxiv_id("10.48550/arXiv.2105.10386").as_deref(),
+            Some("2105.10386")
+        );
         assert_eq!(arxiv_id("10.1017/CBO9781107325715.010"), None);
         assert_eq!(arxiv_id("https://www.cambridge.org/core/books/x"), None);
     }
@@ -986,9 +990,15 @@ mod tests {
     /// A publisher URL runs past 90 opaque characters and says nothing in full.
     #[test]
     fn test_host_label_strips_scheme_path_and_www() {
-        assert_eq!(host_label("https://www.cambridge.org/core/books/x/ABC"), "cambridge.org");
+        assert_eq!(
+            host_label("https://www.cambridge.org/core/books/x/ABC"),
+            "cambridge.org"
+        );
         assert_eq!(host_label("http://arxiv.org/abs/1"), "arxiv.org");
-        assert_eq!(host_label("https://scholarworks.calstate.edu/x?y=1"), "scholarworks.calstate.edu");
+        assert_eq!(
+            host_label("https://scholarworks.calstate.edu/x?y=1"),
+            "scholarworks.calstate.edu"
+        );
     }
 
     /// `_` and `*` are markup in a Typst body, so an unescaped title beginning
