@@ -31,7 +31,12 @@ impl Default for Toc {
             placement: TocPlacement::Right,
             sticky: true,
             mobile_sticky: true,
-            max_width: "45ex".to_string(),
+            // Matches the sidebar width the stylesheet reserves, so a site that
+            // configures nothing gets the column the design intends. The old
+            // `45ex` was about 316px against a 560px allowance, which is the
+            // shape of the bug this default used to demonstrate: a narrow
+            // outline with a wide empty column beside it.
+            max_width: "35rem".to_string(),
         }
     }
 }
