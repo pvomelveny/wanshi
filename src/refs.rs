@@ -422,9 +422,24 @@ fn capitalize_first(value: &str) -> String {
     }
 }
 
-/// The entry type as a display word: `Report`, `Thesis`, `Chapter`.
-fn type_label(entry: &Entry) -> String {
-    capitalize_first(&entry_type_name(entry.entry_type()))
+/// The entry type as a display word — `Report`, `Thesis`, `Chapter` — unless
+/// the type is the bibliography's word for "no type".
+///
+/// `Misc` is what a `.bib` says when it has not classified the work, and Better
+/// BibTeX reaches for it often — `@misc`, `@software` and `@booklet` all land
+/// there, and a Zotero preprint usually does too. Printing it tells a reader
+/// only that the entry declined to say, which is worse than the citation simply
+/// ending: "Pat Poster. _A Preprint_. Misc, 2021." above an arXiv link that
+/// already says exactly what the work is.
+///
+/// Every other type names a real kind of thing and earns the slot, which is the
+/// point of the fallback — a thesis or a report is not recognisable from its
+/// title alone.
+fn informative_type_label(entry: &Entry) -> Option<String> {
+    match entry.entry_type() {
+        EntryType::Misc => None,
+        other => Some(capitalize_first(&entry_type_name(other))),
+    }
 }
 
 /// Whether the work is bound inside a larger one.
@@ -481,11 +496,13 @@ fn publication_details(entry: &Entry) -> String {
     // Something has to open it: the clauses that follow are lowercase
     // continuations, so without an opening the citation reads
     // "_Whitney Numbers_. ed. Neil White" -- a fragment starting a sentence.
+    // An uncategorised entry has no kind worth naming and opens on nothing,
+    // which the `opening_was_empty` path below already knows how to handle.
     let mut opening = match &container {
         Some(title) if bound_inside(entry) => format!("In _{}_", escape_markup(title)),
         Some(title) => format!("_{}_", escape_markup(title)),
         None if implied_by_imprint => String::new(),
-        None => type_label(entry),
+        None => informative_type_label(entry).unwrap_or_default(),
     };
 
     // A volume number modifies a named venue -- `_Annals_ *192*(3)` -- so with
@@ -583,21 +600,29 @@ fn full_reference(entry: &Entry) -> String {
         sentences.push(title);
     }
 
-    // Naming the kind of work is the fallback when nothing records where it
-    // appeared -- every thesis, report and preprint -- so the citation still
-    // says what it is rather than ending after the title.
+    // `publication_details` names the kind of work when nothing records where
+    // it appeared -- every thesis, report and preprint -- so the citation still
+    // says what it is rather than ending after the title. It comes back empty
+    // only for an entry that records neither, and declines to say what it is.
     let mut tail = publication_details(entry);
-    if tail.is_empty() {
-        tail = type_label(entry);
-    }
 
     // The year closes the citation, attached to the venue clause rather than
-    // standing as its own sentence.
+    // standing as its own sentence — or standing alone when there is no clause
+    // for it to close, which is what an uncategorised entry leaves behind.
     if let Some(year) = year(entry) {
-        tail.push_str(&format!(", {year}"));
+        if tail.is_empty() {
+            tail = year.to_string();
+        } else {
+            tail.push_str(&format!(", {year}"));
+        }
     }
-    sentences.push(tail);
+    if !tail.is_empty() {
+        sentences.push(tail);
+    }
 
+    if sentences.is_empty() {
+        return String::new();
+    }
     format!("{}.", sentences.join(". "))
 }
 
@@ -889,11 +914,38 @@ mod tests {
     #[test]
     fn test_an_entry_with_no_detail_still_names_its_kind() {
         let library =
+            hayagriva::io::from_biblatex_str("@techreport{bare, title = {Bare}, year = {2020}}")
+                .expect("parses");
+        assert_eq!(
+            full_reference(library.get("bare").expect("entry")),
+            "_Bare_. Report, 2020."
+        );
+    }
+
+    /// `Misc` is the bibliography's word for "not classified", so it is the one
+    /// label that tells a reader nothing. Better BibTeX reaches for it often --
+    /// `@misc`, `@software` and `@booklet` all land there -- and the year alone
+    /// closes the citation better than a category that declines to say.
+    #[test]
+    fn test_an_uncategorised_entry_does_not_print_misc() {
+        let library =
             hayagriva::io::from_biblatex_str("@misc{bare, title = {Bare}, year = {2020}}")
                 .expect("parses");
         assert_eq!(
             full_reference(library.get("bare").expect("entry")),
-            "_Bare_. Misc, 2020."
+            "_Bare_. 2020."
+        );
+    }
+
+    /// Dropping the label must not leave a dangling separator when there is no
+    /// year either.
+    #[test]
+    fn test_an_uncategorised_entry_with_no_year_ends_after_its_title() {
+        let library =
+            hayagriva::io::from_biblatex_str("@misc{bare, title = {Bare}}").expect("parses");
+        assert_eq!(
+            full_reference(library.get("bare").expect("entry")),
+            "_Bare_."
         );
     }
 
