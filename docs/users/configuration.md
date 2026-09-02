@@ -31,13 +31,13 @@ themes = []
 placement = "right"
 sticky = true
 mobile-sticky = true
-max-width = "45ex"
+max-width = "35rem"
 ```
 
 - `placement`: `left` or `right`.
 - `sticky`: whether the table of contents stays fixed while scrolling on larger screens.
 - `mobile-sticky`: whether sticky behavior is used on mobile.
-- `max-width`: CSS width value for the table of contents.
+- `max-width`: how wide the table of contents column is. A length — `35rem`, `320px`, `45ex`, or a `calc()`/`min()`/`clamp()` expression — sizes the column itself, and the page narrows to match, so the sidebar and the space reserved for it stay the same width. A content keyword such as `max-content` instead caps the sidebar within the column the stylesheet reserves, which lets it shrink to its longest entry; the page does not narrow with it, so a short outline leaves empty space beside it.
 
 ## `[text]`
 
