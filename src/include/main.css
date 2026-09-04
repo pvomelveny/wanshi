@@ -58,7 +58,6 @@ html {
   --background-color-pre: var(--surface);
   --background-color-code: var(--surface);
 
-  --hover-color-block: rgba(130, 39, 39, 0.05);
   --hover-color-link: rgba(130, 39, 39, 0.12);
 
   --link-color: var(--accent);
@@ -460,10 +459,6 @@ section.block.link-list>details>section.block>details {
   padding-right: 10px;
   padding-bottom: 2px;
   border-radius: var(--radius);
-}
-
-.block:hover {
-  background-color: var(--hover-color-block);
 }
 
 .block.hide-metadata>details>summary>header>.metadata,
@@ -898,10 +893,6 @@ path.typst-shape[stroke="#000000"] {
 .block.query {
   margin: 1.2em 0;
   padding-left: 0;
-}
-
-.block.query:hover {
-  background-color: transparent;
 }
 
 /* The tag varies with nesting depth, so match the class alone. */
