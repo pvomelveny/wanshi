@@ -488,9 +488,18 @@ section.block>details>section.block {
 /* The gutter, on the same box the rule is painted on so the two cannot drift
    apart. It has to live here rather than on the section: the rule is drawn at
    this box's left edge, and with the 5px still on the section the rule landed
-   hard against the initial letter of every line. */
+   hard against the initial letter of every line.
+
+   The radius is what tapers the hover rule off at both ends rather than letting
+   it stop square. An inset shadow is clipped to the padding box *including* its
+   corners, so this is the whole of the effect — the `details` paints nothing
+   else, and a radius on a box with no background or border is invisible until
+   something is drawn inside it. It was inherited from `.block` until the rule
+   moved off the section, and worth keeping deliberately: square ends read as a
+   cut-off, a taper reads as a mark. */
 section.block>details>section.block>details {
   padding-left: 5px;
+  border-radius: var(--radius);
 }
 
 /* Marks which section the pointer is in, without touching the text.
