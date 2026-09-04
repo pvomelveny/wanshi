@@ -502,13 +502,19 @@ section.block>details>section.block>details {
   border-radius: var(--radius);
 }
 
-/* Marks which section the pointer is in, without touching the text.
+/* Traces the containment path the pointer is in, without touching the text.
 
-   `:has()` is what keeps it to one. `:hover` matches every element on the
-   pointer's ancestor chain, so an unguarded rule marks every section containing
-   the cursor at once; excluding any block that itself contains a hovered block
-   leaves exactly the innermost. With the cursor in a parent's own prose no child
-   is hovered, so the parent is innermost and takes the mark, which is right.
+   `:hover` matches every element on the pointer's ancestor chain, so this marks
+   the hovered section *and* every section holding it: a set of nested brackets
+   reading outward, which says not just where the pointer is but what it is
+   inside.
+
+   That the chain is welcome here and was intolerable as a fill is the whole
+   difference between the two: a translucent background paints every layer over
+   the same pixels, so five of them compounded to 1 − 0.95⁵ and the page went
+   dusty pink. Each rule instead sits at its own level's left edge, one indent
+   step apart, so they cannot overlap and nothing accumulates however deep the
+   nesting goes.
 
    An inset shadow rather than a border, because a border would widen the box and
    shove every line of the section 2px right as the pointer arrived.
@@ -523,8 +529,9 @@ section.block>details>section.block>details {
 
    Scoped to a section inside a section, matching the indent rule above: the
    outermost section is the whole article, and a rule down its full height would
-   report only that the pointer is somewhere on the page. */
-section.block>details>section.block:hover:not(:has(section.block:hover))>details {
+   report only that the pointer is somewhere on the page — and would put a
+   bracket down the entire article every time the pointer moved. */
+section.block>details>section.block:hover>details {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
