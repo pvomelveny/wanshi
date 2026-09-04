@@ -473,9 +473,23 @@ section.block.link-list>details>section.block>details {
    is subtracted from the margin rather than added to it, so `--block-indent` is
    exactly what a reader sees per level. Doing it the other way would also drift
    between breakpoints: `.block` drops to 2px of padding below 1000px, which
-   would quietly shrink the step there. */
+   would quietly shrink the step there.
+
+   `padding-right: 0` because `.block`'s 10px was clearance for the fill that no
+   longer exists, and it compounded the way the tint did: measured five deep, the
+   ragged right edge stepped inward 10px a level — 806, 796, 786, 776 — so a
+   nested note gave up measure on both sides for no reason a reader could see. */
 section.block>details>section.block {
   margin-left: calc(var(--block-indent) - 5px);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The gutter, on the same box the rule is painted on so the two cannot drift
+   apart. It has to live here rather than on the section: the rule is drawn at
+   this box's left edge, and with the 5px still on the section the rule landed
+   hard against the initial letter of every line. */
+section.block>details>section.block>details {
   padding-left: 5px;
 }
 
@@ -490,10 +504,18 @@ section.block>details>section.block {
    An inset shadow rather than a border, because a border would widen the box and
    shove every line of the section 2px right as the pointer arrived.
 
+   Painted on the `details`, not on the section, for two reasons that both come
+   from `.block`. Its `padding-bottom: 2px` is what stops the `details`'s
+   `margin-bottom: 1em` collapsing out, so a section's box runs a full 18px past
+   its own last line — a third of the height of a one-paragraph note, hanging
+   below it as bare rule. And its `border-radius` clips an inset shadow to the
+   rounded corners, so the mark tapered away 5px at each end. The `details` has
+   neither, and spans exactly the summary and the body.
+
    Scoped to a section inside a section, matching the indent rule above: the
    outermost section is the whole article, and a rule down its full height would
    report only that the pointer is somewhere on the page. */
-section.block>details>section.block:hover:not(:has(section.block:hover)) {
+section.block>details>section.block:hover:not(:has(section.block:hover))>details {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
