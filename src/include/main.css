@@ -60,6 +60,11 @@ html {
 
   --hover-color-link: rgba(130, 39, 39, 0.12);
 
+  /* What one step of nesting is worth. This is the only cue for depth now that
+     hovering no longer tints, so it has to be visible; the 5px it replaces was
+     not. Halved below the 1000px breakpoint — see the rule there. */
+  --block-indent: 1rem;
+
   --link-color: var(--accent);
   --slug-color: var(--muted);
   --logo-color: var(--muted);
@@ -461,6 +466,37 @@ section.block.link-list>details>section.block>details {
   border-radius: var(--radius);
 }
 
+/* One step of nesting, for a section inside a section — the whole of how depth
+   reads on a page, since nothing tints any more.
+
+   The 5px is the gutter the hover rule needs to sit clear of the text, and it
+   is subtracted from the margin rather than added to it, so `--block-indent` is
+   exactly what a reader sees per level. Doing it the other way would also drift
+   between breakpoints: `.block` drops to 2px of padding below 1000px, which
+   would quietly shrink the step there. */
+section.block>details>section.block {
+  margin-left: calc(var(--block-indent) - 5px);
+  padding-left: 5px;
+}
+
+/* Marks which section the pointer is in, without touching the text.
+
+   `:has()` is what keeps it to one. `:hover` matches every element on the
+   pointer's ancestor chain, so an unguarded rule marks every section containing
+   the cursor at once; excluding any block that itself contains a hovered block
+   leaves exactly the innermost. With the cursor in a parent's own prose no child
+   is hovered, so the parent is innermost and takes the mark, which is right.
+
+   An inset shadow rather than a border, because a border would widen the box and
+   shove every line of the section 2px right as the pointer arrived.
+
+   Scoped to a section inside a section, matching the indent rule above: the
+   outermost section is the whole article, and a rule down its full height would
+   report only that the pointer is somewhere on the page. */
+section.block>details>section.block:hover:not(:has(section.block:hover)) {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .block.hide-metadata>details>summary>header>.metadata,
 .block.hide-metadata>details>summary>header>.metadata-row {
   display: none;
@@ -646,6 +682,9 @@ body>header {
 @media only screen and (max-width: 1000px) {
   :root body {
     --code-font-size: 0.85rem;
+    /* Five levels at the full step is 80px, which a phone column cannot spare
+       and the article has no sidebar to borrow it from. */
+    --block-indent: 0.5rem;
   }
 
   figure {
