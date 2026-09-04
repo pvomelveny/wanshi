@@ -530,8 +530,15 @@ section.block>details>section.block>details {
    Scoped to a section inside a section, matching the indent rule above: the
    outermost section is the whole article, and a rule down its full height would
    report only that the pointer is somewhere on the page — and would put a
-   bracket down the entire article every time the pointer moved. */
-section.block>details>section.block:hover>details {
+   bracket down the entire article every time the pointer moved.
+
+   The second selector is the same marks held open by a click. `main.js` puts
+   `pinned` on the chain and `has-pin` on the article; the `:not(.has-pin)` on
+   the first selector is what makes the pointer go quiet while something is
+   pinned, since the whole reason to pin a path is to stop it moving when you
+   look away from it. */
+article:not(.has-pin) section.block>details>section.block:hover>details,
+section.block>details>section.block.pinned>details {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
