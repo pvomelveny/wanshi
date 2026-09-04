@@ -555,3 +555,69 @@ function applyDynamicColorInvert() {
     }, { once: true });
   });
 })();
+
+// Pinning: hold the hovered containment path open with a click.
+//
+// The bars normally trace whatever the pointer is inside and vanish when it
+// leaves. A click freezes the path so it survives looking away — reading a
+// deeply nested note while keeping sight of what holds it. A second click on
+// the same section releases it, as does a click on prose belonging to no
+// nested section.
+(function () {
+  const PIN_SELECTOR = "article section.block section.block";
+  let pinned = null;
+
+  function article() {
+    return document.querySelector("article");
+  }
+
+  function clearPin() {
+    document
+      .querySelectorAll("section.block.pinned")
+      .forEach((section) => section.classList.remove("pinned"));
+    const root = article();
+    if (root) root.classList.remove("has-pin");
+    pinned = null;
+  }
+
+  function setPin(section) {
+    clearPin();
+    const root = article();
+    if (!root) return;
+    // The whole chain, so the brackets a click freezes are the ones the pointer
+    // was already drawing. The page's own section is marked too and no rule
+    // matches it, which is the same way it stays out of the hover.
+    for (let node = section; node && node !== root; node = node.parentElement) {
+      if (node.matches("section.block")) node.classList.add("pinned");
+    }
+    root.classList.add("has-pin");
+    pinned = section;
+  }
+
+  document.addEventListener("click", function (event) {
+    const root = article();
+    if (!root || !root.contains(event.target)) return;
+
+    // A click that ends a drag is a text selection, not a pick.
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) return;
+
+    // Everything here already means something: a summary opens and closes its
+    // section, and the rest navigate. None of them should also move the pin.
+    if (event.target.closest("summary, a, button, input, [onclick]")) return;
+
+    const section = event.target.closest(PIN_SELECTOR);
+    if (!section || section === pinned) {
+      clearPin();
+      return;
+    }
+    setPin(section);
+  });
+
+  // Escape releases, the way it does for the search box. Registered separately
+  // rather than folded into that handler, which only runs when a search index
+  // is configured.
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && pinned) clearPin();
+  });
+})();

@@ -58,8 +58,12 @@ html {
   --background-color-pre: var(--surface);
   --background-color-code: var(--surface);
 
-  --hover-color-block: rgba(130, 39, 39, 0.05);
   --hover-color-link: rgba(130, 39, 39, 0.12);
+
+  /* What one step of nesting is worth. This is the only cue for depth now that
+     hovering no longer tints, so it has to be visible; the 5px it replaces was
+     not. Halved below the 1000px breakpoint — see the rule there. */
+  --block-indent: 1rem;
 
   --link-color: var(--accent);
   --slug-color: var(--muted);
@@ -462,8 +466,80 @@ section.block.link-list>details>section.block>details {
   border-radius: var(--radius);
 }
 
-.block:hover {
-  background-color: var(--hover-color-block);
+/* One step of nesting, for a section inside a section — the whole of how depth
+   reads on a page, since nothing tints any more.
+
+   The 5px is the gutter the hover rule needs to sit clear of the text, and it
+   is subtracted from the margin rather than added to it, so `--block-indent` is
+   exactly what a reader sees per level. Doing it the other way would also drift
+   between breakpoints: `.block` drops to 2px of padding below 1000px, which
+   would quietly shrink the step there.
+
+   `padding-right: 0` because `.block`'s 10px was clearance for the fill that no
+   longer exists, and it compounded the way the tint did: measured five deep, the
+   ragged right edge stepped inward 10px a level — 806, 796, 786, 776 — so a
+   nested note gave up measure on both sides for no reason a reader could see. */
+section.block>details>section.block {
+  margin-left: calc(var(--block-indent) - 5px);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The gutter, on the same box the rule is painted on so the two cannot drift
+   apart. It has to live here rather than on the section: the rule is drawn at
+   this box's left edge, and with the 5px still on the section the rule landed
+   hard against the initial letter of every line.
+
+   The radius is what tapers the hover rule off at both ends rather than letting
+   it stop square. An inset shadow is clipped to the padding box *including* its
+   corners, so this is the whole of the effect — the `details` paints nothing
+   else, and a radius on a box with no background or border is invisible until
+   something is drawn inside it. It was inherited from `.block` until the rule
+   moved off the section, and worth keeping deliberately: square ends read as a
+   cut-off, a taper reads as a mark. */
+section.block>details>section.block>details {
+  padding-left: 5px;
+  border-radius: var(--radius);
+}
+
+/* Traces the containment path the pointer is in, without touching the text.
+
+   `:hover` matches every element on the pointer's ancestor chain, so this marks
+   the hovered section *and* every section holding it: a set of nested brackets
+   reading outward, which says not just where the pointer is but what it is
+   inside.
+
+   That the chain is welcome here and was intolerable as a fill is the whole
+   difference between the two: a translucent background paints every layer over
+   the same pixels, so five of them compounded to 1 − 0.95⁵ and the page went
+   dusty pink. Each rule instead sits at its own level's left edge, one indent
+   step apart, so they cannot overlap and nothing accumulates however deep the
+   nesting goes.
+
+   An inset shadow rather than a border, because a border would widen the box and
+   shove every line of the section 2px right as the pointer arrived.
+
+   Painted on the `details`, not on the section, for two reasons that both come
+   from `.block`. Its `padding-bottom: 2px` is what stops the `details`'s
+   `margin-bottom: 1em` collapsing out, so a section's box runs a full 18px past
+   its own last line — a third of the height of a one-paragraph note, hanging
+   below it as bare rule. And its `border-radius` clips an inset shadow to the
+   rounded corners, so the mark tapered away 5px at each end. The `details` has
+   neither, and spans exactly the summary and the body.
+
+   Scoped to a section inside a section, matching the indent rule above: the
+   outermost section is the whole article, and a rule down its full height would
+   report only that the pointer is somewhere on the page — and would put a
+   bracket down the entire article every time the pointer moved.
+
+   The second selector is the same marks held open by a click. `main.js` puts
+   `pinned` on the chain and `has-pin` on the article; the `:not(.has-pin)` on
+   the first selector is what makes the pointer go quiet while something is
+   pinned, since the whole reason to pin a path is to stop it moving when you
+   look away from it. */
+article:not(.has-pin) section.block>details>section.block:hover>details,
+section.block>details>section.block.pinned>details {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .block.hide-metadata>details>summary>header>.metadata,
@@ -651,6 +727,9 @@ body>header {
 @media only screen and (max-width: 1000px) {
   :root body {
     --code-font-size: 0.85rem;
+    /* Five levels at the full step is 80px, which a phone column cannot spare
+       and the article has no sidebar to borrow it from. */
+    --block-indent: 0.5rem;
   }
 
   figure {
@@ -898,10 +977,6 @@ path.typst-shape[stroke="#000000"] {
 .block.query {
   margin: 1.2em 0;
   padding-left: 0;
-}
-
-.block.query:hover {
-  background-color: transparent;
 }
 
 /* The tag varies with nesting depth, so match the class alone. */
