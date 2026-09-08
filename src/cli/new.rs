@@ -142,6 +142,19 @@ pub fn new_config(command: &NewConfigCommand) -> eyre::Result<()> {
 }
 
 pub fn new_config_inner(config_path: &Utf8PathBuf) -> Result<(), eyre::Error> {
+    // Refuse rather than overwrite: this writes *defaults*, and the file it
+    // would replace is the user's customized configuration. It also has to be
+    // the first check `wanshi init` runs into, since `add_project_files`
+    // writes the config before anything that would fail on an existing site —
+    // without this, a second `wanshi init` reset the config and *then* errored
+    // on the source directory, having already destroyed the settings.
+    if config_path.exists() {
+        return Err(eyre::eyre!(
+            "already exists: {} (to regenerate it while keeping your settings, run `wanshi upgrade config`)",
+            config_path
+        ));
+    }
+
     let config = config::Config::default();
     let toml = toml::to_string(&config).wrap_err("failed to serialize default config")?;
 
@@ -401,6 +414,44 @@ fn strip_new_post_tree_prefix(path: &Utf8Path, trees_dir_without_root: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `wanshi new config` and a re-run `wanshi init` used to overwrite a
+    /// customized `Wanshi.toml` with defaults — init even failed *afterwards*
+    /// on the existing source directory, having already reset the settings.
+    #[test]
+    fn test_new_config_refuses_to_overwrite_an_existing_config() {
+        let root = crate::test_io::case_dir("new-config-exists");
+        std::fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+        let customized = "[wanshi]\ntrees = \"my-notes\"\n";
+        std::fs::write(config_path.as_std_path(), customized).unwrap();
+
+        let err = new_config_inner(&config_path).unwrap_err();
+
+        assert!(format!("{err}").contains("already exists"));
+        assert!(
+            format!("{err}").contains("wanshi upgrade config"),
+            "the error should name the command that regenerates safely"
+        );
+        let untouched = std::fs::read_to_string(config_path.as_std_path()).unwrap();
+        assert_eq!(untouched, customized, "the customized config must survive");
+
+        let _ = std::fs::remove_dir_all(root.as_std_path());
+    }
+
+    #[test]
+    fn test_new_config_writes_where_none_exists() {
+        let root = crate::test_io::case_dir("new-config-fresh");
+        std::fs::create_dir_all(root.as_std_path()).unwrap();
+        let config_path = root.join("Wanshi.toml");
+
+        new_config_inner(&config_path).unwrap();
+
+        let written = std::fs::read_to_string(config_path.as_std_path()).unwrap();
+        assert!(written.contains("[wanshi]"));
+
+        let _ = std::fs::remove_dir_all(root.as_std_path());
+    }
 
     #[test]
     fn test_normalize_new_section_path_appends_typ_when_missing_extension() {
