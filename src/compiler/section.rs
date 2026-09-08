@@ -347,16 +347,4 @@ impl Section {
             .slug()
             .ok_or_else(|| eyre!("missing required metadata `slug` in compiled section"))
     }
-
-    pub fn spanned(&self) -> String {
-        let mut html = String::new();
-        for content in &self.children {
-            match content {
-                SectionContent::Plain(text) => html.push_str(text),
-                // Metadata values reject embeds and listings at parse time.
-                SectionContent::Embed(_) | SectionContent::Query(_) => unreachable!(),
-            }
-        }
-        html
-    }
 }
