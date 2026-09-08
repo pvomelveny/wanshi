@@ -8,7 +8,7 @@ use std::{collections::HashSet, ops::Not};
 use crate::{
     compiler::counter::{Counter, NumberKind},
     config::build::FooterMode,
-    entry::{MetaData, KEY_INTERNAL_ANON_SUBTREE},
+    entry::{MetaData, KEY_DATE, KEY_INTERNAL_ANON_SUBTREE, KEY_TAXON, KEY_TITLE},
     environment::{self, record_hash, verify_hash},
     html_flake::{self, html_footer_section},
     slug::Slug,
@@ -373,9 +373,9 @@ impl Writer {
     ) -> &'a str {
         match footer_sort_by {
             "slug" => slug.as_str(),
-            "date" => section.metadata.get_str("date").map_or("", String::as_str),
-            "taxon" => section.metadata.data_taxon().map_or("", String::as_str),
-            "title" => section.metadata.title().map_or("", String::as_str),
+            KEY_DATE => section.metadata.get_str(KEY_DATE).map_or("", String::as_str),
+            KEY_TAXON => section.metadata.data_taxon().map_or("", String::as_str),
+            KEY_TITLE => section.metadata.title().map_or("", String::as_str),
             key => section.metadata.get_str(key).map_or("", String::as_str),
         }
     }

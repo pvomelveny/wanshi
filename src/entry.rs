@@ -313,7 +313,7 @@ impl EntryMetaData {
             .map(|taxon| crate::compiler::taxon::display_taxon(taxon))
             .unwrap_or_default();
         let taxon = adhoc_taxon.unwrap_or(&entry_taxon);
-        let entry_title = self.0.get("title").map(|s| s.as_str()).unwrap_or("");
+        let entry_title = self.get_str(KEY_TITLE).map(String::as_str).unwrap_or("");
         let title = adhoc_title.unwrap_or(entry_title);
         let slug = self
             .slug()
@@ -344,10 +344,12 @@ impl EntryMetaData {
 
     /// hidden suffix `/index` in slug text.
     pub fn to_slug_text(slug: &str) -> String {
-        let mut slug_text = match slug.ends_with("/index") {
-            true => &slug[..slug.len() - "/index".len()],
-            false => slug,
-        };
+        // A directory index displays as the directory it is the hub of. The
+        // root index resolves to the empty directory and has nothing else to
+        // show, so it keeps its own name.
+        let mut slug_text = crate::slug::directory_of_index(Slug::new(slug))
+            .filter(|directory| !directory.is_empty())
+            .unwrap_or(slug);
         if environment::is_short_slug() {
             let pos = slug_text.rfind("/").map_or(0, |n| n + 1);
             slug_text = &slug_text[pos..];
