@@ -2,14 +2,14 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
-use eyre::eyre;
+use eyre::{eyre, WrapErr};
 use std::{collections::HashSet, ops::Not};
 
 use crate::{
     compiler::counter::{Counter, NumberKind},
     config::build::FooterMode,
     entry::{MetaData, KEY_INTERNAL_ANON_SUBTREE},
-    environment::{self, verify_update_hash},
+    environment::{self, record_hash, verify_hash},
     html_flake::{self, html_footer_section},
     slug::Slug,
 };
@@ -111,31 +111,29 @@ impl Writer {
         let relative_path = format!("{}.html", section.slug()?);
         let filepath = crate::environment::output_path(&relative_path);
 
-        match verify_update_hash(&relative_path, &html) {
-            // The hash records what was written, not what is still there, so a
-            // matching hash alone does not mean the page exists: deleting the
-            // output directory and rebuilding would otherwise produce a site
-            // with no pages at all, and report success.
-            Ok(changed) if changed || !filepath.exists() => match std::fs::write(&filepath, html) {
-                Ok(()) => {
-                    if *crate::cli::build::verbose() {
-                        color_print::ceprintln!("<g>[build]</> {:?} {}", page_title, filepath);
-                    }
-                }
-                Err(err) => color_print::ceprintln!("<r>{:?}</>", err),
-            },
-            Ok(_) => {
-                if *crate::cli::build::verbose_skip() {
-                    color_print::ceprintln!("<dim>[skip]</> {} (unchanged)", relative_path);
-                }
+        // The hash records what was written, not what is still there, so a
+        // matching hash alone does not mean the page exists: deleting the
+        // output directory and rebuilding would otherwise produce a site
+        // with no pages at all, and report success.
+        let (changed, current_hash) = verify_hash(&relative_path, &html);
+        if !changed && filepath.exists() {
+            if *crate::cli::build::verbose_skip() {
+                color_print::ceprintln!("<dim>[skip]</> {} (unchanged)", relative_path);
             }
-            Err(err) => {
-                color_print::ceprintln!(
-                    "<y>Warning: failed to verify hash for `{}`: {}</>",
-                    relative_path,
-                    err
-                );
-            }
+            return Ok(());
+        }
+
+        std::fs::write(&filepath, html)
+            .wrap_err_with(|| eyre!("failed to write page `{}`", filepath))?;
+        // Recorded only now that the page is on disk. Recording before the
+        // write — which is what a combined check-and-update did — made a
+        // failed write invisible twice over: the build exited 0, and the next
+        // build read a current hash and left the stale page alone until its
+        // source happened to change.
+        record_hash(&relative_path, current_hash)?;
+
+        if *crate::cli::build::verbose() {
+            color_print::ceprintln!("<g>[build]</> {:?} {}", page_title, filepath);
         }
 
         Ok(())
@@ -806,6 +804,33 @@ mod tests {
                 filepath.exists(),
                 "a page removed from the output should be rewritten"
             );
+        });
+    }
+
+    /// A page that cannot be written is a failed build, not a red line on
+    /// stderr — and the failure must not be recorded as success, or the stale
+    /// page on disk would be skipped as "unchanged" on every later build.
+    #[test]
+    fn test_a_failed_write_fails_the_build_and_is_retried() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            shallows.insert(Slug::new("a"), shallow_section("a", "A"));
+
+            let state = compile_all(&shallows).unwrap();
+            let section = state.compiled().get(&Slug::new("a")).unwrap();
+
+            // A directory where the page should go makes `fs::write` fail.
+            let filepath = crate::environment::output_path("a.html");
+            std::fs::create_dir_all(filepath.as_std_path()).unwrap();
+
+            let result = Writer::write(section, &state);
+            assert!(result.is_err(), "an unwritable page must fail the build");
+
+            // With the obstacle gone, the very next attempt writes the page:
+            // nothing was recorded that could make it look current.
+            std::fs::remove_dir_all(filepath.as_std_path()).unwrap();
+            Writer::write(section, &state).unwrap();
+            assert!(filepath.is_file());
         });
     }
 

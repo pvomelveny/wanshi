@@ -5,11 +5,15 @@
 use camino::Utf8Path;
 use eyre::{eyre, Context};
 
-/// Return is file modified i.e. is hash updated.
-pub fn is_hash_updated<P: AsRef<Utf8Path>>(content: &str, hash_path: P) -> (bool, u64) {
+fn content_hash(content: &str) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     std::hash::Hash::hash(&content, &mut hasher);
-    let current_hash = std::hash::Hasher::finish(&hasher);
+    std::hash::Hasher::finish(&hasher)
+}
+
+/// Return is file modified i.e. is hash updated.
+pub fn is_hash_updated<P: AsRef<Utf8Path>>(content: &str, hash_path: P) -> (bool, u64) {
+    let current_hash = content_hash(content);
 
     let history_hash = std::fs::read_to_string(hash_path.as_ref())
         .ok()
@@ -40,23 +44,34 @@ pub fn verify_and_file_hash<P: AsRef<Utf8Path>>(relative_path: P) -> eyre::Resul
     Ok(is_modified)
 }
 
-/// Checks whether the content has been modified by comparing its current hash with the stored hash.
-/// If the content is modified, updates the stored hash to reflect the latest state.
-pub fn verify_update_hash<P: AsRef<Utf8Path>>(
-    path: P,
-    content: &str,
-) -> Result<bool, std::io::Error> {
+/// Whether `content` differs from the last recorded state of `path`'s output,
+/// along with its hash for [`record_hash`].
+///
+/// Split from recording on purpose: the check runs before the output is
+/// written, the record only after the write has landed. One function that did
+/// both persisted the new hash *first*, so a write that then failed looked
+/// current forever — the stale file on disk was never rewritten until its
+/// source happened to change.
+pub fn verify_hash<P: AsRef<Utf8Path>>(path: P, content: &str) -> (bool, u64) {
     if *crate::cli::build::no_cache_enabled() {
-        return Ok(true);
+        return (true, content_hash(content));
     }
 
     let hash_path = super::hash_file_path(path.as_ref());
-    let (is_modified, current_hash) = is_hash_updated(content, &hash_path);
-    if is_modified {
-        std::fs::write(&hash_path, current_hash.to_string())?;
+    is_hash_updated(content, &hash_path)
+}
+
+/// Record `hash` as the last successfully written state of `path`'s output.
+///
+/// Call this only once the output itself is on disk — see [`verify_hash`].
+pub fn record_hash<P: AsRef<Utf8Path>>(path: P, hash: u64) -> eyre::Result<()> {
+    if *crate::cli::build::no_cache_enabled() {
+        return Ok(());
     }
 
-    Ok(is_modified)
+    let hash_path = super::hash_file_path(path.as_ref());
+    std::fs::write(&hash_path, hash.to_string())
+        .wrap_err_with(|| eyre!("failed to write file `{}`", hash_path))
 }
 
 #[cfg(test)]
@@ -101,18 +116,42 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_update_hash_roundtrip_detects_changes() {
+    fn test_verify_then_record_roundtrip_detects_changes() {
         let root = crate::test_io::case_dir("env-hash-roundtrip");
         fs::create_dir_all(root.as_std_path()).unwrap();
 
         super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
             let relative = "hash-tests/a.md";
-            assert!(verify_update_hash(relative, "v1").unwrap());
-            assert!(!verify_update_hash(relative, "v1").unwrap());
-            assert!(verify_update_hash(relative, "v2").unwrap());
+            let (changed, hash) = verify_hash(relative, "v1");
+            assert!(changed);
+            record_hash(relative, hash).unwrap();
+
+            assert!(!verify_hash(relative, "v1").0);
+            assert!(verify_hash(relative, "v2").0);
 
             let hash_path = super::super::hash_file_path(relative);
             assert!(hash_path.exists());
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// The check must not record anything: recording is the writer's reward for
+    /// a successful write, not a side effect of asking.
+    #[test]
+    fn test_verify_hash_alone_records_nothing() {
+        let root = crate::test_io::case_dir("env-hash-verify-only");
+        fs::create_dir_all(root.as_std_path()).unwrap();
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let relative = "hash-tests/b.md";
+            let (changed, _) = verify_hash(relative, "v1");
+            assert!(changed);
+            // Asked twice without recording, it must answer "changed" twice.
+            assert!(verify_hash(relative, "v1").0);
+
+            let hash_path = super::super::hash_file_path(relative);
+            assert!(!hash_path.exists());
         });
 
         let _ = fs::remove_dir_all(root);
