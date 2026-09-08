@@ -175,7 +175,12 @@ impl HTMLContent {
             // letters left every heading in place, which surfaced as literal
             // `<h1>` text in RSS summaries.
             let name = r#"[A-Za-z][A-Za-z0-9]*"#;
-            let attrs = r#"(\s+[a-zA-Z-]+(="([^"\\]|\\[\s\S])*")?)*"#;
+            // Attribute names may be namespaced and dotted: Typst renders
+            // inline math as `<svg xmlns:xlink="…">`, and a name pattern that
+            // could not match a colon left the entire tag behind as literal
+            // text — the bug that once filled the search index with tokens
+            // like `xlink` and `072em`.
+            let attrs = r#"(\s+[a-zA-Z_:][-a-zA-Z0-9_:.]*(="([^"\\]|\\[\s\S])*")?)*"#;
             Regex::new(&format!(r#"<{name}{attrs}\s*/?>|</{name}>"#)).unwrap()
         });
 
@@ -231,6 +236,19 @@ mod html_content_tests {
     fn test_remove_all_tags_strips_tag_names_containing_digits() {
         let text = HTMLContent::Plain("<h1>Heading</h1><p>Body</p>".to_string()).remove_all_tags();
         assert_eq!(text, "HeadingBody");
+    }
+
+    /// Typst's inline-math SVG carries `xmlns:xlink`; an attribute pattern
+    /// that could not match a colon used to leave the whole tag behind as
+    /// literal text.
+    #[test]
+    fn test_remove_all_tags_strips_tags_with_namespaced_attributes() {
+        let text = HTMLContent::Plain(
+            r#"a <svg xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1 1"><g/></svg> b"#
+                .to_string(),
+        )
+        .remove_all_tags();
+        assert_eq!(text, "a  b");
     }
 
     #[test]

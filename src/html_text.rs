@@ -10,10 +10,10 @@
 //! 1. **Drop elements whose contents are not prose.** Typst renders inline math
 //!    and diagrams as `<svg>`, so their coordinates and namespace URLs would
 //!    otherwise read as words.
-//! 2. **Remove the remaining tags.** The display-side stripper in
-//!    [`crate::compiler::section::HTMLContent::remove_all_tags`] is regex-based
-//!    and cannot match attribute names containing a colon, which is exactly what
-//!    Typst's SVG output emits. This scans instead.
+//! 2. **Remove the remaining tags.** A scan, unlike the display-side
+//!    regex in [`crate::compiler::section::HTMLContent::remove_all_tags`]:
+//!    dropping an element *with its contents* needs the open and close tags
+//!    paired up, which a per-tag pattern cannot express.
 //! 3. **Unescape entities.** Generated HTML contains `&amp;`; text that is about
 //!    to be escaped again for XML must be unescaped first, or a reader shows a
 //!    literal `&amp;`.
@@ -38,8 +38,8 @@ pub(crate) fn collapse_whitespace(value: &str) -> String {
 
 /// Drop `<name ...> … </name>` regions, contents included.
 ///
-/// A scan rather than a regex: the general tag pattern cannot match attribute
-/// names containing a colon (`xmlns:xlink`), which Typst emits on every SVG.
+/// A scan rather than a regex: pairing an opening tag with its close so the
+/// contents go too is not something a per-tag pattern can express.
 fn remove_element(html: &str, name: &str) -> String {
     let open = format!("<{name}");
     let close = format!("</{name}>");
