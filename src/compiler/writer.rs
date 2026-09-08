@@ -88,10 +88,19 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
 ///
 /// `taxon` and `number` are never both set: a section with a taxon shows its
 /// number in the pill, one without shows a bare number in front of the title.
+///
+/// `children` is the counter this section's contents number from: the prefixed
+/// counter its own number opened, or `None` when the section took no number.
+/// `None` means "keep using the parent's counter itself" — an unnumbered
+/// section is transparent, so what is inside it counts in the sequence the
+/// section sits in, and those increments must reach the next sibling. A copy
+/// of the parent's counter looked equivalent and was not: increments made in
+/// the copy vanished on the way out, and the sibling after an unnumbered
+/// wrapper repeated whatever number was taken inside it.
 struct Label {
     taxon: String,
     number: String,
-    children: Counter,
+    children: Option<Counter>,
 }
 
 pub struct Writer {}
@@ -490,7 +499,7 @@ impl Writer {
         let Label {
             taxon: adhoc_taxon,
             number: adhoc_number,
-            children: mut subcounter,
+            children: mut own_counter,
         } = Writer::label(section, counter, numbered_here);
         let (mut contents, mut items) = (String::new(), String::new());
 
@@ -498,9 +507,19 @@ impl Writer {
             let is_collection = section.metadata.is_collect()?;
 
             for child in &section.children {
+                // A numbered section's children count inside it, in the
+                // prefixed counter its own number opened. An unnumbered one has
+                // no counter of its own to give: its children stay in the
+                // parent's sequence, and they advance the parent's counter
+                // directly so that what happens inside the section is still
+                // there for the sibling after it.
+                let child_counter = match own_counter.as_mut() {
+                    Some(own) => own,
+                    None => &mut *counter,
+                };
                 let (content_html, item_html) = Writer::content_to_html(
                     child,
-                    &mut subcounter,
+                    child_counter,
                     !is_collection,
                     state,
                     depth,
@@ -618,7 +637,7 @@ impl Writer {
             return Label {
                 taxon: display_taxon(text),
                 number: String::new(),
-                children: counter.passthrough(),
+                children: None,
             };
         }
 
@@ -637,13 +656,13 @@ impl Writer {
             Label {
                 taxon: String::new(),
                 number,
-                children,
+                children: Some(children),
             }
         } else {
             Label {
                 taxon: Taxon::new(Some(number), text.to_string()).display(),
                 number: String::new(),
-                children,
+                children: Some(children),
             }
         }
     }
@@ -1077,6 +1096,77 @@ mod tests {
                 )],
             );
             assert_eq!(labels(&html), vec!["", "Definition."]);
+        });
+    }
+
+    /// An unnumbered section is transparent, and transparency has to work in
+    /// both directions: a number taken *inside* it must be visible to the
+    /// sibling *after* it. This used to be implemented by handing the wrapper's
+    /// children a copy of the parent's counter, whose increments were lost on
+    /// the way out — so the section after the wrapper repeated the number just
+    /// taken inside it, and two different blocks on one page were both "2.".
+    #[test]
+    fn test_a_number_taken_inside_an_unnumbered_wrapper_reaches_the_next_sibling() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let embed_opt = |url: &str, numbering: Option<bool>| {
+                LazyContent::Embed(EmbedContent {
+                    url: url.to_string(),
+                    title: None,
+                    option: SectionOption::new(numbering, true, true),
+                })
+            };
+
+            let mut page = shallow_section_with_content(
+                "index",
+                "Root",
+                HTMLContent::Lazy(vec![
+                    embed_opt("/a", None),
+                    embed_opt("/wrapper", Some(false)),
+                    embed_opt("/c", None),
+                ]),
+            );
+            page.metadata.0.insert(
+                KEY_NUMBERING.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
+            shallows.insert(Slug::new("index"), page);
+
+            for (slug, taxon) in [("a", "definition"), ("c", "definition")] {
+                let mut section = shallow_section(slug, slug);
+                section
+                    .metadata
+                    .0
+                    .insert(KEY_TAXON.to_string(), HTMLContent::Plain(taxon.to_string()));
+                shallows.insert(Slug::new(slug), section);
+            }
+
+            // The wrapper opts out of numbering, but a block inside it opts
+            // back in — the comment on `section_to_html` promises exactly this.
+            shallows.insert(
+                Slug::new("wrapper"),
+                shallow_section_with_content(
+                    "wrapper",
+                    "Wrapper",
+                    HTMLContent::Lazy(vec![embed_opt("/inner", Some(true))]),
+                ),
+            );
+            let mut inner = shallow_section("inner", "inner");
+            inner.metadata.0.insert(
+                KEY_TAXON.to_string(),
+                HTMLContent::Plain("remark".to_string()),
+            );
+            shallows.insert(Slug::new("inner"), inner);
+
+            let state = compile_all(&shallows).unwrap();
+            let root = state.compiled().get(&Slug::new("index")).unwrap();
+            let html = Writer::html_doc(root, &state).unwrap().0;
+
+            assert_eq!(
+                labels(&html),
+                vec!["", "Definition 1.", "", "Remark 2.", "Definition 3."],
+                "the number taken inside the wrapper must advance the page's sequence"
+            );
         });
     }
 
