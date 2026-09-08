@@ -62,7 +62,9 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
             open + 1
         };
         let is_heading = bytes.get(after) == Some(&b'h')
-            && bytes.get(after + 1).is_some_and(|d| (b'1'..=b'6').contains(d));
+            && bytes
+                .get(after + 1)
+                .is_some_and(|d| (b'1'..=b'6').contains(d));
 
         if !is_heading {
             out.push_str(&html[cursor..open + 1]);
@@ -371,7 +373,10 @@ impl Writer {
     ) -> &'a str {
         match footer_sort_by {
             "slug" => slug.as_str(),
-            KEY_DATE => section.metadata.get_str(KEY_DATE).map_or("", String::as_str),
+            KEY_DATE => section
+                .metadata
+                .get_str(KEY_DATE)
+                .map_or("", String::as_str),
             KEY_TAXON => section.metadata.data_taxon().map_or("", String::as_str),
             KEY_TITLE => section.metadata.title().map_or("", String::as_str),
             key => section.metadata.get_str(key).map_or("", String::as_str),

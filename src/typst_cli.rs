@@ -125,9 +125,8 @@ mod tests {
     /// program and how to install it instead.
     #[test]
     fn test_a_missing_typst_binary_is_named_not_blamed_on_the_note() {
-        let err = super::explain_typst_spawn_failure(std::io::Error::from(
-            std::io::ErrorKind::NotFound,
-        ));
+        let err =
+            super::explain_typst_spawn_failure(std::io::Error::from(std::io::ErrorKind::NotFound));
         let message = format!("{err}");
         assert!(message.contains("`typst` program was not found on PATH"));
         assert!(message.contains("install"), "got: {message}");

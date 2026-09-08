@@ -73,7 +73,6 @@ impl Counter {
             },
         )
     }
-
 }
 
 #[cfg(test)]
@@ -137,5 +136,4 @@ mod tests {
         assert_eq!(take(&mut inside, NumberKind::Statement), "1.1.");
         assert_eq!(take(&mut page, NumberKind::Statement), "2.");
     }
-
 }
