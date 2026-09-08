@@ -2,13 +2,7 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex, OnceLock,
-    },
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::sync::{Mutex, OnceLock};
 
 use camino::Utf8Path;
 use eyre::{eyre, WrapErr};
@@ -47,7 +41,6 @@ pub struct BuildCommand {
 static VERBOSE: OnceLock<bool> = OnceLock::new();
 static VERBOSE_SKIP: OnceLock<bool> = OnceLock::new();
 static NO_CACHE: OnceLock<bool> = OnceLock::new();
-static ATOMIC_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static SERVE_SESSION: OnceLock<Mutex<Option<compiler::ServeCompileSession>>> = OnceLock::new();
 
 #[derive(Clone, Copy)]
@@ -255,16 +248,7 @@ fn write_reload_marker(mode: BuildMode) -> eyre::Result<()> {
 }
 
 fn next_reload_marker_stamp() -> String {
-    next_atomic_write_stamp()
-}
-
-fn next_atomic_write_stamp() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let sequence = ATOMIC_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    format!("{nanos}-{sequence}")
+    atomic_text::next_atomic_write_stamp()
 }
 
 fn write_reload_marker_atomically(marker_path: &Utf8Path, stamp: &str) -> eyre::Result<()> {

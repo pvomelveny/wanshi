@@ -79,7 +79,9 @@ pub(crate) fn write_text_atomically(
     Ok(())
 }
 
-fn next_atomic_write_stamp() -> String {
+/// A process-unique, monotonically fresh suffix for names that must not
+/// collide: temp files here, and the serve reload marker.
+pub(crate) fn next_atomic_write_stamp() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
