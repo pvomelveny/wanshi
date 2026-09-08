@@ -51,7 +51,8 @@ fn to_html_string<P: AsRef<Utf8Path>>(rel_path: P, root_dir: P) -> eyre::Result<
         .arg(full_path)
         .arg("-")
         .stdout(std::process::Stdio::piped())
-        .output()?;
+        .output()
+        .map_err(explain_typst_spawn_failure)?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -63,6 +64,25 @@ fn to_html_string<P: AsRef<Utf8Path>>(rel_path: P, root_dir: P) -> eyre::Result<
             rel_path.as_str()
         ))
     }
+}
+
+/// A missing `typst` binary surfaces from `spawn` as a bare "No such file or
+/// directory" that, wrapped in "failed to compile typst file `<note>`", reads
+/// as though the *note* were missing. Typst is a hard requirement of every
+/// command that compiles sections, so name the real absence and say how to fix
+/// it — the same courtesy `cli::serve::process::explain_spawn_failure` extends
+/// when miniserve is not installed.
+fn explain_typst_spawn_failure(err: std::io::Error) -> eyre::Report {
+    if err.kind() != std::io::ErrorKind::NotFound {
+        return eyre!("failed to run `typst`: {err}");
+    }
+
+    eyre!(
+        "the `typst` program was not found on PATH.\n\n\
+         wanshi compiles every note by shelling out to Typst. Install it —\n  \
+         `brew install typst` or `cargo install typst-cli`\n\
+         — or make an existing installation visible on PATH."
+    )
 }
 
 fn failed_in_file(src_pos: &'static str, file_path: &str, stderr: std::borrow::Cow<'_, str>) {
@@ -98,6 +118,25 @@ mod tests {
     fn test_html_to_body_content_missing_tags() {
         let err = html_to_body_content("<p>Hello</p>");
         assert!(err.is_err());
+    }
+
+    /// The raw error is "No such file or directory", which wrapped in "failed
+    /// to compile typst file `<note>`" blames the note. It must name the
+    /// program and how to install it instead.
+    #[test]
+    fn test_a_missing_typst_binary_is_named_not_blamed_on_the_note() {
+        let err = super::explain_typst_spawn_failure(std::io::Error::from(
+            std::io::ErrorKind::NotFound,
+        ));
+        let message = format!("{err}");
+        assert!(message.contains("`typst` program was not found on PATH"));
+        assert!(message.contains("install"), "got: {message}");
+
+        // Any other spawn failure passes through with the program named.
+        let other = super::explain_typst_spawn_failure(std::io::Error::from(
+            std::io::ErrorKind::PermissionDenied,
+        ));
+        assert!(format!("{other}").contains("failed to run `typst`"));
     }
 
     #[test]
