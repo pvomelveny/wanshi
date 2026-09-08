@@ -3,7 +3,7 @@
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
 use eyre::{eyre, WrapErr};
-use std::{collections::HashSet, ops::Not};
+use std::collections::HashSet;
 
 use crate::{
     compiler::counter::{Counter, NumberKind},
@@ -62,9 +62,7 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
             open + 1
         };
         let is_heading = bytes.get(after) == Some(&b'h')
-            && bytes
-                .get(after + 1)
-                .is_some_and(|d| d.is_ascii_digit() && (b'1'..=b'6').contains(d));
+            && bytes.get(after + 1).is_some_and(|d| (b'1'..=b'6').contains(d));
 
         if !is_heading {
             out.push_str(&html[cursor..open + 1]);
@@ -194,7 +192,7 @@ impl Writer {
             PAGE_LEVEL,
             numbering,
         )?;
-        let catalog_html = if items.is_empty().not() {
+        let catalog_html = if !items.is_empty() {
             html_flake::html_catalog_block(&items)
         } else {
             Default::default()
