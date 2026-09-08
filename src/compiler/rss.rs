@@ -278,7 +278,7 @@ fn normalize_pub_date(date: &str) -> Option<String> {
 }
 
 fn format_rfc822_date((year, month, day): (u32, u8, u8)) -> Option<String> {
-    if !is_valid_calendar_date(year, month, day) {
+    if !crate::footer_sort::is_valid_calendar_date(year, month, day) {
         return None;
     }
 
@@ -287,30 +287,6 @@ fn format_rfc822_date((year, month, day): (u32, u8, u8)) -> Option<String> {
     Some(format!(
         "{weekday}, {day:02} {month} {year:04} 00:00:00 GMT"
     ))
-}
-
-fn is_valid_calendar_date(year: u32, month: u8, day: u8) -> bool {
-    let max_day = days_in_month(year, month);
-    max_day != 0 && day != 0 && day <= max_day
-}
-
-fn days_in_month(year: u32, month: u8) -> u8 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if is_leap_year(year) {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 0,
-    }
-}
-
-fn is_leap_year(year: u32) -> bool {
-    year.is_multiple_of(400) || (year.is_multiple_of(4) && !year.is_multiple_of(100))
 }
 
 fn day_of_week(year: u32, month: u8, day: u8) -> usize {
