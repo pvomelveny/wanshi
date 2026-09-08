@@ -257,13 +257,24 @@ impl MetaData<String> for EntryMetaData {
     }
 }
 
+/// The readable text of an HTML fragment: tags stripped, entities decoded.
+///
+/// Derived metadata (`page-title`, `data-taxon`) is *plain text*, and its
+/// consumers — attribute values, the `<title>` element, RSS, the search
+/// index — all escape on their own way out. Leaving entities in would escape
+/// them a second time: a title holding `&amp;` reached the feed as
+/// `&amp;amp;`, which a reader shows as a literal "&amp;".
+fn plain_text(content: &HTMLContent) -> String {
+    htmlize::unescape(content.remove_all_tags()).into_owned()
+}
+
 impl HTMLMetaData {
     pub fn compute_textual_attrs(&mut self) {
         if self.page_title().is_none() {
             if let Some(title) = self.title() {
                 self.0.insert(
                     KEY_PAGE_TITLE.to_string(),
-                    HTMLContent::Plain(title.remove_all_tags()),
+                    HTMLContent::Plain(plain_text(title)),
                 );
             }
         }
@@ -276,7 +287,7 @@ impl HTMLMetaData {
                 // one: "fig. 3 caption" arrived as "Fig".
                 self.0.insert(
                     KEY_DATA_TAXON.to_string(),
-                    HTMLContent::Plain(taxon.remove_all_tags()),
+                    HTMLContent::Plain(plain_text(taxon)),
                 );
             }
         }
@@ -369,5 +380,47 @@ impl EntryMetaData {
         self.get_str(KEY_FOOTER_SORT_BY)
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `page-title` is plain text for consumers that escape on their own way
+    /// out — attributes, `<title>`, RSS, the search index. Entities left in
+    /// would be escaped a second time: `&amp;` in a title reached the feed as
+    /// `&amp;amp;`, a literal "&amp;" to the reader.
+    #[test]
+    fn test_compute_textual_attrs_yields_plain_unescaped_text() {
+        let mut metadata = HTMLMetaData(OrderedMap::new());
+        metadata.0.insert(
+            KEY_TITLE.to_string(),
+            HTMLContent::Plain("Salt &amp; <em>pepper</em>".to_string()),
+        );
+
+        metadata.compute_textual_attrs();
+
+        assert_eq!(
+            metadata.page_title().map(String::as_str),
+            Some("Salt & pepper")
+        );
+    }
+
+    #[test]
+    fn test_compute_textual_attrs_never_overrides_an_explicit_page_title() {
+        let mut metadata = HTMLMetaData(OrderedMap::new());
+        metadata.0.insert(
+            KEY_TITLE.to_string(),
+            HTMLContent::Plain("Ignored".to_string()),
+        );
+        metadata.0.insert(
+            KEY_PAGE_TITLE.to_string(),
+            HTMLContent::Plain("Chosen".to_string()),
+        );
+
+        metadata.compute_textual_attrs();
+
+        assert_eq!(metadata.page_title().map(String::as_str), Some("Chosen"));
     }
 }
