@@ -259,97 +259,47 @@ impl Writer {
         references: &HashSet<Slug>,
         callback: Option<&CallbackValue>,
     ) -> eyre::Result<String> {
-        let mut references: Vec<Slug> = references.iter().copied().collect();
-        Writer::sort_footer_slugs(&mut references, state, footer_sort_by);
-
-        let references_text = environment::get_footer_references_text();
         let references_html = if enable_references {
-            let mut content = String::new();
-            for slug in &references {
-                let Some(section) = state.compiled().get(slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing referenced section `{}`; skipping footer reference.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    footer_mode,
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("references", &references_text, &content)
-            }
+            Writer::footer_block(
+                "references",
+                &environment::get_footer_references_text(),
+                references.iter().copied().collect(),
+                footer_mode,
+                footer_sort_by,
+                state,
+            )?
         } else {
             String::default()
         };
 
-        let backlinks_text = environment::get_footer_backlinks_text();
-        let backlinks_html = if let Some(s) = callback {
-            let mut backlinks: Vec<Slug> = s.backlinks.iter().copied().collect();
-            Writer::sort_footer_slugs(&mut backlinks, state, footer_sort_by);
-            let mut content = String::new();
-            for slug in backlinks {
-                let Some(section) = state.compiled().get(&slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing backlink section `{}`; skipping footer backlink.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    footer_mode,
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("backlinks", &backlinks_text, &content)
-            }
-        } else {
-            String::default()
+        let backlinks_html = match callback {
+            Some(callback) => Writer::footer_block(
+                "backlinks",
+                &environment::get_footer_backlinks_text(),
+                callback.backlinks.iter().copied().collect(),
+                footer_mode,
+                footer_sort_by,
+                state,
+            )?,
+            None => String::default(),
         };
+
         // "Found in": the notes that embed this one.
         //
         // Always rendered as links, whatever `footer-mode` says. An embedder
         // contains the note whose page this is, so rendering one in embed mode
         // would print the page inside its own footer. Forcing Link mode means
         // there is nothing to recurse into rather than a recursion to guard.
-        let embedded_by_text = environment::get_footer_embedded_by_text();
-        let embedded_by_html = if let Some(s) = callback {
-            let mut hosts: Vec<Slug> = s.embedded_by.iter().copied().collect();
-            Writer::sort_footer_slugs(&mut hosts, state, footer_sort_by);
-            let mut content = String::new();
-            for slug in hosts {
-                let Some(section) = state.compiled().get(&slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing embedding section `{}`; skipping footer entry.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    Some(FooterMode::Link),
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("embedded-by", &embedded_by_text, &content)
-            }
-        } else {
-            String::default()
+        let embedded_by_html = match callback {
+            Some(callback) => Writer::footer_block(
+                "embedded-by",
+                &environment::get_footer_embedded_by_text(),
+                callback.embedded_by.iter().copied().collect(),
+                Some(FooterMode::Link),
+                footer_sort_by,
+                state,
+            )?,
+            None => String::default(),
         };
 
         Ok(html_flake::html_footer(
@@ -357,6 +307,46 @@ impl Writer {
             &backlinks_html,
             &embedded_by_html,
         ))
+    }
+
+    /// One footer block — "References", "Backlinks", "Found in" — rendered
+    /// from the slugs it lists: sorted, one entry per slug, wrapped under its
+    /// heading. Empty when nothing renders, so an empty block emits no heading.
+    ///
+    /// A slug with no compiled section is warned about and skipped rather than
+    /// failing the page: the rest of the footer is still worth having.
+    fn footer_block(
+        id: &str,
+        heading: &str,
+        mut slugs: Vec<Slug>,
+        mode: Option<FooterMode>,
+        footer_sort_by: &str,
+        state: &CompileState,
+    ) -> eyre::Result<String> {
+        Writer::sort_footer_slugs(&mut slugs, state, footer_sort_by);
+
+        let mut content = String::new();
+        for slug in slugs {
+            let Some(section) = state.compiled().get(&slug) else {
+                color_print::ceprintln!(
+                    "<y>Warning: missing section `{}`; skipping its entry in the \"{}\" footer block.</>",
+                    slug,
+                    id
+                );
+                continue;
+            };
+            content.push_str(&Writer::footer_section_to_html(
+                mode,
+                section,
+                FOOTER_ENTRY_LEVEL,
+            )?);
+        }
+
+        if content.is_empty() {
+            Ok(String::default())
+        } else {
+            Ok(html_footer_section(id, heading, &content))
+        }
     }
 
     fn sort_footer_slugs(slugs: &mut [Slug], state: &CompileState, footer_sort_by: &str) {
