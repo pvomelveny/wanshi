@@ -9,8 +9,8 @@ use camino::Utf8Path;
 
 use crate::{
     entry::{
-        is_plain_metadata, EntryMetaData, HTMLMetaData, MetaData, KEY_EXT,
-        KEY_INTERNAL_ANON_SUBTREE, KEY_SLUG, KEY_TITLE,
+        is_plain_metadata, EntryMetaData, HTMLMetaData, MetaData, KEY_INTERNAL_ANON_SUBTREE,
+        KEY_TITLE,
     },
     environment,
     ordered_map::OrderedMap,
@@ -60,15 +60,16 @@ fn compile_all_with_missing_index_warning(
 
     let mut state = CompileState::new(residued);
     let index = Slug::new(INDEX_SLUG);
-    if emit_missing_index_warning && state.compile(shallows, index)?.is_none() {
+    // The index is always compiled first so the graph grows from the entry
+    // point; the flag only decides whether its absence is worth a warning.
+    let index_is_missing = state.compile(shallows, index)?.is_none();
+    if emit_missing_index_warning && index_is_missing {
         color_print::ceprintln!(
             "<y>Warning: Missing `{}` section, please provide `{}.{}`.</>",
             INDEX_SLUG,
             INDEX_SLUG,
             crate::slug::Ext::Typ
         );
-    } else if !emit_missing_index_warning {
-        let _ = state.compile(shallows, index)?;
     }
 
     /*
@@ -139,11 +140,71 @@ impl CompileState {
         spanned: &UnresolvedSection,
     ) -> eyre::Result<()> {
         let slug = spanned.slug()?;
-        let ext = spanned.ext()?;
+        // Not needed to compile the content, but a section without an
+        // extension is a stale cache entry; failing here keeps the error close
+        // to its cause instead of surfacing at render time.
+        spanned.ext()?;
+
+        let (children, references) = self.compile_content(shallows, slug, &spanned.content)?;
+
+        if let Some(parent) = spanned.metadata.parent() {
+            self.callback.specify_parent(slug, parent);
+        }
+
+        // compile metadata
+        let mut metadata = EntryMetaData(OrderedMap::new());
+        for key in spanned.metadata.keys() {
+            let Some(value) = spanned.metadata.get(key) else {
+                return Err(eyre!(
+                    "metadata key `{}` vanished while compiling `{}`",
+                    key,
+                    slug
+                ));
+            };
+            if is_plain_metadata(key) {
+                if let Some(val) = value.as_string() {
+                    metadata.update(key.to_string(), val.to_owned());
+                } else {
+                    return Err(eyre!(
+                        "metadata field `{}` in `{}` is expected to be plain text",
+                        key,
+                        slug
+                    ));
+                }
+            } else {
+                // A metadata value compiles like a body — a link in it still
+                // records a backlink — but its rendering stays local. It used
+                // to be round-tripped through `self.compiled[slug]` inside a
+                // synthetic section, which parked a bogus entry under the real
+                // slug mid-compile for anything resolving `slug` to observe.
+                let (meta_children, _references) = self.compile_content(shallows, slug, value)?;
+                metadata.update(key.to_string(), plain_html(&meta_children));
+            };
+        }
+
+        // remove from `self.residued` after compiled.
+        self.residued.remove(&slug);
+
+        let section = Section::new(metadata, children, references);
+        self.compiled.insert(slug, section);
+        Ok(())
+    }
+
+    /// Compile one stream of content authored by `slug`: the section's body,
+    /// or one of its metadata values. Returns the compiled children and the
+    /// sections they reference; link and embed edges land on `self.callback`
+    /// as a side effect, which is why a link written in a metadata value still
+    /// produces a backlink.
+    fn compile_content(
+        &mut self,
+        shallows: &UnresolvedSections,
+        slug: Slug,
+        content: &HTMLContent,
+    ) -> eyre::Result<(SectionContents, HashSet<Slug>)> {
         let mut children: SectionContents = vec![];
         let mut references: HashSet<Slug> = HashSet::new();
 
-        match &spanned.content {
+        match content {
             HTMLContent::Plain(html) => {
                 children.push(SectionContent::Plain(html.to_string()));
             }
@@ -253,71 +314,7 @@ impl CompileState {
             }
         };
 
-        if let Some(parent) = spanned.metadata.parent() {
-            self.callback.specify_parent(slug, parent);
-        }
-
-        // compile metadata
-        let mut metadata = EntryMetaData(OrderedMap::new());
-        for key in spanned.metadata.keys() {
-            let Some(value) = spanned.metadata.get(key) else {
-                return Err(eyre!(
-                    "metadata key `{}` vanished while compiling `{}`",
-                    key,
-                    slug
-                ));
-            };
-            if is_plain_metadata(key) {
-                if let Some(val) = value.as_string() {
-                    metadata.update(key.to_string(), val.to_owned());
-                } else {
-                    return Err(eyre!(
-                        "metadata field `{}` in `{}` is expected to be plain text",
-                        key,
-                        slug
-                    ));
-                }
-            } else {
-                let spanned: UnresolvedSection = Self::metadata_to_section(value, slug, ext);
-                self.compile_unresolved(shallows, &spanned)?;
-                let compiled = self.compiled.get(&slug).ok_or_else(|| {
-                    eyre!(
-                        "compiled section `{}` disappeared while compiling metadata",
-                        slug
-                    )
-                })?;
-                let html = compiled.spanned();
-                metadata.update(key.to_string(), html);
-            };
-        }
-
-        // remove from `self.residued` after compiled.
-        self.residued.remove(&slug);
-
-        let section = Section::new(metadata, children, references);
-        self.compiled.insert(slug, section);
-        Ok(())
-    }
-
-    fn metadata_to_section(
-        content: &HTMLContent,
-        current_slug: Slug,
-        current_ext: &str,
-    ) -> UnresolvedSection {
-        let mut metadata = OrderedMap::new();
-        metadata.insert(
-            KEY_SLUG.to_string(),
-            HTMLContent::Plain(current_slug.to_string()),
-        );
-        metadata.insert(
-            KEY_EXT.to_string(),
-            HTMLContent::Plain(current_ext.to_string()),
-        );
-
-        UnresolvedSection {
-            metadata: HTMLMetaData(metadata),
-            content: content.clone(),
-        }
+        Ok((children, references))
     }
 
     pub fn compiled(&self) -> &HashMap<Slug, Section> {
@@ -559,6 +556,21 @@ fn get_metadata(shallows: &UnresolvedSections, slug: Slug) -> Option<&HTMLMetaDa
     shallows.get(&slug).map(|s| &s.metadata)
 }
 
+/// The HTML of a compiled metadata value.
+///
+/// Metadata values reject subtrees and listings at parse time, so only plain
+/// chunks can appear here; anything else is a bug in the parser, not input.
+fn plain_html(children: &SectionContents) -> String {
+    let mut html = String::new();
+    for content in children {
+        match content {
+            SectionContent::Plain(text) => html.push_str(text),
+            SectionContent::Embed(_) | SectionContent::Query(_) => unreachable!(),
+        }
+    }
+    html
+}
+
 fn html_content_to_html_string(content: &HTMLContent) -> String {
     content
         .as_string()
@@ -603,7 +615,7 @@ mod tests {
     use super::super::section::{EmbedContent, LocalLink, SectionOption};
     use super::*;
     use crate::{
-        entry::{KEY_ASREF, KEY_INTERNAL_ANON_SUBTREE},
+        entry::{KEY_ASREF, KEY_EXT, KEY_INTERNAL_ANON_SUBTREE, KEY_SLUG},
         ordered_map::OrderedMap,
     };
 

@@ -73,15 +73,6 @@ impl Counter {
             },
         )
     }
-
-    /// The counter children use when this section takes no number of its own.
-    ///
-    /// An unnumbered section is transparent: what is inside it goes on counting
-    /// where the section itself would have, rather than starting a sequence
-    /// nothing introduces.
-    pub fn passthrough(&self) -> Counter {
-        self.clone()
-    }
 }
 
 #[cfg(test)]
@@ -144,13 +135,5 @@ mod tests {
         let (_, mut inside) = page.take(NumberKind::Outline);
         assert_eq!(take(&mut inside, NumberKind::Statement), "1.1.");
         assert_eq!(take(&mut page, NumberKind::Statement), "2.");
-    }
-
-    #[test]
-    fn test_passthrough_leaves_an_unnumbered_section_transparent() {
-        let mut page = Counter::init();
-        assert_eq!(take(&mut page, NumberKind::Statement), "1.");
-        let mut inherited = page.passthrough();
-        assert_eq!(take(&mut inherited, NumberKind::Statement), "2.");
     }
 }

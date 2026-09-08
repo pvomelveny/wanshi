@@ -74,6 +74,7 @@ pub fn parse_config(config: &str) -> eyre::Result<Config> {
     Ok(config)
 }
 
+#[cfg(test)]
 mod test {
 
     #[test]

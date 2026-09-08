@@ -2,14 +2,14 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic), Spore (@s-cerevisiae)
 
-use eyre::eyre;
-use std::{collections::HashSet, ops::Not};
+use eyre::{eyre, WrapErr};
+use std::collections::HashSet;
 
 use crate::{
     compiler::counter::{Counter, NumberKind},
     config::build::FooterMode,
-    entry::{MetaData, KEY_INTERNAL_ANON_SUBTREE},
-    environment::{self, verify_update_hash},
+    entry::{MetaData, KEY_DATE, KEY_INTERNAL_ANON_SUBTREE, KEY_TAXON, KEY_TITLE},
+    environment::{self, record_hash, verify_hash},
     html_flake::{self, html_footer_section},
     slug::Slug,
 };
@@ -64,7 +64,7 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
         let is_heading = bytes.get(after) == Some(&b'h')
             && bytes
                 .get(after + 1)
-                .is_some_and(|d| d.is_ascii_digit() && (b'1'..=b'6').contains(d));
+                .is_some_and(|d| (b'1'..=b'6').contains(d));
 
         if !is_heading {
             out.push_str(&html[cursor..open + 1]);
@@ -88,10 +88,19 @@ fn shift_heading_levels(html: &str, depth: u8) -> String {
 ///
 /// `taxon` and `number` are never both set: a section with a taxon shows its
 /// number in the pill, one without shows a bare number in front of the title.
+///
+/// `children` is the counter this section's contents number from: the prefixed
+/// counter its own number opened, or `None` when the section took no number.
+/// `None` means "keep using the parent's counter itself" — an unnumbered
+/// section is transparent, so what is inside it counts in the sequence the
+/// section sits in, and those increments must reach the next sibling. A copy
+/// of the parent's counter looked equivalent and was not: increments made in
+/// the copy vanished on the way out, and the sibling after an unnumbered
+/// wrapper repeated whatever number was taken inside it.
 struct Label {
     taxon: String,
     number: String,
-    children: Counter,
+    children: Option<Counter>,
 }
 
 pub struct Writer {}
@@ -102,31 +111,29 @@ impl Writer {
         let relative_path = format!("{}.html", section.slug()?);
         let filepath = crate::environment::output_path(&relative_path);
 
-        match verify_update_hash(&relative_path, &html) {
-            // The hash records what was written, not what is still there, so a
-            // matching hash alone does not mean the page exists: deleting the
-            // output directory and rebuilding would otherwise produce a site
-            // with no pages at all, and report success.
-            Ok(changed) if changed || !filepath.exists() => match std::fs::write(&filepath, html) {
-                Ok(()) => {
-                    if *crate::cli::build::verbose() {
-                        color_print::ceprintln!("<g>[build]</> {:?} {}", page_title, filepath);
-                    }
-                }
-                Err(err) => color_print::ceprintln!("<r>{:?}</>", err),
-            },
-            Ok(_) => {
-                if *crate::cli::build::verbose_skip() {
-                    color_print::ceprintln!("<dim>[skip]</> {} (unchanged)", relative_path);
-                }
+        // The hash records what was written, not what is still there, so a
+        // matching hash alone does not mean the page exists: deleting the
+        // output directory and rebuilding would otherwise produce a site
+        // with no pages at all, and report success.
+        let (changed, current_hash) = verify_hash(&relative_path, &html);
+        if !changed && filepath.exists() {
+            if *crate::cli::build::verbose_skip() {
+                color_print::ceprintln!("<dim>[skip]</> {} (unchanged)", relative_path);
             }
-            Err(err) => {
-                color_print::ceprintln!(
-                    "<y>Warning: failed to verify hash for `{}`: {}</>",
-                    relative_path,
-                    err
-                );
-            }
+            return Ok(());
+        }
+
+        std::fs::write(&filepath, html)
+            .wrap_err_with(|| eyre!("failed to write page `{}`", filepath))?;
+        // Recorded only now that the page is on disk. Recording before the
+        // write — which is what a combined check-and-update did — made a
+        // failed write invisible twice over: the build exited 0, and the next
+        // build read a current hash and left the stale page alone until its
+        // source happened to change.
+        record_hash(&relative_path, current_hash)?;
+
+        if *crate::cli::build::verbose() {
+            color_print::ceprintln!("<g>[build]</> {:?} {}", page_title, filepath);
         }
 
         Ok(())
@@ -187,7 +194,7 @@ impl Writer {
             PAGE_LEVEL,
             numbering,
         )?;
-        let catalog_html = if items.is_empty().not() {
+        let catalog_html = if !items.is_empty() {
             html_flake::html_catalog_block(&items)
         } else {
             Default::default()
@@ -252,97 +259,47 @@ impl Writer {
         references: &HashSet<Slug>,
         callback: Option<&CallbackValue>,
     ) -> eyre::Result<String> {
-        let mut references: Vec<Slug> = references.iter().copied().collect();
-        Writer::sort_footer_slugs(&mut references, state, footer_sort_by);
-
-        let references_text = environment::get_footer_references_text();
         let references_html = if enable_references {
-            let mut content = String::new();
-            for slug in &references {
-                let Some(section) = state.compiled().get(slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing referenced section `{}`; skipping footer reference.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    footer_mode,
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("references", &references_text, &content)
-            }
+            Writer::footer_block(
+                "references",
+                &environment::get_footer_references_text(),
+                references.iter().copied().collect(),
+                footer_mode,
+                footer_sort_by,
+                state,
+            )?
         } else {
             String::default()
         };
 
-        let backlinks_text = environment::get_footer_backlinks_text();
-        let backlinks_html = if let Some(s) = callback {
-            let mut backlinks: Vec<Slug> = s.backlinks.iter().copied().collect();
-            Writer::sort_footer_slugs(&mut backlinks, state, footer_sort_by);
-            let mut content = String::new();
-            for slug in backlinks {
-                let Some(section) = state.compiled().get(&slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing backlink section `{}`; skipping footer backlink.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    footer_mode,
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("backlinks", &backlinks_text, &content)
-            }
-        } else {
-            String::default()
+        let backlinks_html = match callback {
+            Some(callback) => Writer::footer_block(
+                "backlinks",
+                &environment::get_footer_backlinks_text(),
+                callback.backlinks.iter().copied().collect(),
+                footer_mode,
+                footer_sort_by,
+                state,
+            )?,
+            None => String::default(),
         };
+
         // "Found in": the notes that embed this one.
         //
         // Always rendered as links, whatever `footer-mode` says. An embedder
         // contains the note whose page this is, so rendering one in embed mode
         // would print the page inside its own footer. Forcing Link mode means
         // there is nothing to recurse into rather than a recursion to guard.
-        let embedded_by_text = environment::get_footer_embedded_by_text();
-        let embedded_by_html = if let Some(s) = callback {
-            let mut hosts: Vec<Slug> = s.embedded_by.iter().copied().collect();
-            Writer::sort_footer_slugs(&mut hosts, state, footer_sort_by);
-            let mut content = String::new();
-            for slug in hosts {
-                let Some(section) = state.compiled().get(&slug) else {
-                    color_print::ceprintln!(
-                        "<y>Warning: missing embedding section `{}`; skipping footer entry.</>",
-                        slug
-                    );
-                    continue;
-                };
-                content.push_str(&Writer::footer_section_to_html(
-                    Some(FooterMode::Link),
-                    section,
-                    FOOTER_ENTRY_LEVEL,
-                )?);
-            }
-
-            if content.is_empty() {
-                String::default()
-            } else {
-                html_footer_section("embedded-by", &embedded_by_text, &content)
-            }
-        } else {
-            String::default()
+        let embedded_by_html = match callback {
+            Some(callback) => Writer::footer_block(
+                "embedded-by",
+                &environment::get_footer_embedded_by_text(),
+                callback.embedded_by.iter().copied().collect(),
+                Some(FooterMode::Link),
+                footer_sort_by,
+                state,
+            )?,
+            None => String::default(),
         };
 
         Ok(html_flake::html_footer(
@@ -350,6 +307,46 @@ impl Writer {
             &backlinks_html,
             &embedded_by_html,
         ))
+    }
+
+    /// One footer block — "References", "Backlinks", "Found in" — rendered
+    /// from the slugs it lists: sorted, one entry per slug, wrapped under its
+    /// heading. Empty when nothing renders, so an empty block emits no heading.
+    ///
+    /// A slug with no compiled section is warned about and skipped rather than
+    /// failing the page: the rest of the footer is still worth having.
+    fn footer_block(
+        id: &str,
+        heading: &str,
+        mut slugs: Vec<Slug>,
+        mode: Option<FooterMode>,
+        footer_sort_by: &str,
+        state: &CompileState,
+    ) -> eyre::Result<String> {
+        Writer::sort_footer_slugs(&mut slugs, state, footer_sort_by);
+
+        let mut content = String::new();
+        for slug in slugs {
+            let Some(section) = state.compiled().get(&slug) else {
+                color_print::ceprintln!(
+                    "<y>Warning: missing section `{}`; skipping its entry in the \"{}\" footer block.</>",
+                    slug,
+                    id
+                );
+                continue;
+            };
+            content.push_str(&Writer::footer_section_to_html(
+                mode,
+                section,
+                FOOTER_ENTRY_LEVEL,
+            )?);
+        }
+
+        if content.is_empty() {
+            Ok(String::default())
+        } else {
+            Ok(html_footer_section(id, heading, &content))
+        }
     }
 
     fn sort_footer_slugs(slugs: &mut [Slug], state: &CompileState, footer_sort_by: &str) {
@@ -376,9 +373,12 @@ impl Writer {
     ) -> &'a str {
         match footer_sort_by {
             "slug" => slug.as_str(),
-            "date" => section.metadata.get_str("date").map_or("", String::as_str),
-            "taxon" => section.metadata.data_taxon().map_or("", String::as_str),
-            "title" => section.metadata.title().map_or("", String::as_str),
+            KEY_DATE => section
+                .metadata
+                .get_str(KEY_DATE)
+                .map_or("", String::as_str),
+            KEY_TAXON => section.metadata.data_taxon().map_or("", String::as_str),
+            KEY_TITLE => section.metadata.title().map_or("", String::as_str),
             key => section.metadata.get_str(key).map_or("", String::as_str),
         }
     }
@@ -490,7 +490,7 @@ impl Writer {
         let Label {
             taxon: adhoc_taxon,
             number: adhoc_number,
-            children: mut subcounter,
+            children: mut own_counter,
         } = Writer::label(section, counter, numbered_here);
         let (mut contents, mut items) = (String::new(), String::new());
 
@@ -498,9 +498,19 @@ impl Writer {
             let is_collection = section.metadata.is_collect()?;
 
             for child in &section.children {
+                // A numbered section's children count inside it, in the
+                // prefixed counter its own number opened. An unnumbered one has
+                // no counter of its own to give: its children stay in the
+                // parent's sequence, and they advance the parent's counter
+                // directly so that what happens inside the section is still
+                // there for the sibling after it.
+                let child_counter = match own_counter.as_mut() {
+                    Some(own) => own,
+                    None => &mut *counter,
+                };
                 let (content_html, item_html) = Writer::content_to_html(
                     child,
-                    &mut subcounter,
+                    child_counter,
                     !is_collection,
                     state,
                     depth,
@@ -618,7 +628,7 @@ impl Writer {
             return Label {
                 taxon: display_taxon(text),
                 number: String::new(),
-                children: counter.passthrough(),
+                children: None,
             };
         }
 
@@ -637,13 +647,13 @@ impl Writer {
             Label {
                 taxon: String::new(),
                 number,
-                children,
+                children: Some(children),
             }
         } else {
             Label {
                 taxon: Taxon::new(Some(number), text.to_string()).display(),
                 number: String::new(),
-                children,
+                children: Some(children),
             }
         }
     }
@@ -787,6 +797,33 @@ mod tests {
                 filepath.exists(),
                 "a page removed from the output should be rewritten"
             );
+        });
+    }
+
+    /// A page that cannot be written is a failed build, not a red line on
+    /// stderr — and the failure must not be recorded as success, or the stale
+    /// page on disk would be skipped as "unchanged" on every later build.
+    #[test]
+    fn test_a_failed_write_fails_the_build_and_is_retried() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            shallows.insert(Slug::new("a"), shallow_section("a", "A"));
+
+            let state = compile_all(&shallows).unwrap();
+            let section = state.compiled().get(&Slug::new("a")).unwrap();
+
+            // A directory where the page should go makes `fs::write` fail.
+            let filepath = crate::environment::output_path("a.html");
+            std::fs::create_dir_all(filepath.as_std_path()).unwrap();
+
+            let result = Writer::write(section, &state);
+            assert!(result.is_err(), "an unwritable page must fail the build");
+
+            // With the obstacle gone, the very next attempt writes the page:
+            // nothing was recorded that could make it look current.
+            std::fs::remove_dir_all(filepath.as_std_path()).unwrap();
+            Writer::write(section, &state).unwrap();
+            assert!(filepath.is_file());
         });
     }
 
@@ -1077,6 +1114,77 @@ mod tests {
                 )],
             );
             assert_eq!(labels(&html), vec!["", "Definition."]);
+        });
+    }
+
+    /// An unnumbered section is transparent, and transparency has to work in
+    /// both directions: a number taken *inside* it must be visible to the
+    /// sibling *after* it. This used to be implemented by handing the wrapper's
+    /// children a copy of the parent's counter, whose increments were lost on
+    /// the way out — so the section after the wrapper repeated the number just
+    /// taken inside it, and two different blocks on one page were both "2.".
+    #[test]
+    fn test_a_number_taken_inside_an_unnumbered_wrapper_reaches_the_next_sibling() {
+        with_test_env(|| {
+            let mut shallows = HashMap::new();
+            let embed_opt = |url: &str, numbering: Option<bool>| {
+                LazyContent::Embed(EmbedContent {
+                    url: url.to_string(),
+                    title: None,
+                    option: SectionOption::new(numbering, true, true),
+                })
+            };
+
+            let mut page = shallow_section_with_content(
+                "index",
+                "Root",
+                HTMLContent::Lazy(vec![
+                    embed_opt("/a", None),
+                    embed_opt("/wrapper", Some(false)),
+                    embed_opt("/c", None),
+                ]),
+            );
+            page.metadata.0.insert(
+                KEY_NUMBERING.to_string(),
+                HTMLContent::Plain("true".to_string()),
+            );
+            shallows.insert(Slug::new("index"), page);
+
+            for (slug, taxon) in [("a", "definition"), ("c", "definition")] {
+                let mut section = shallow_section(slug, slug);
+                section
+                    .metadata
+                    .0
+                    .insert(KEY_TAXON.to_string(), HTMLContent::Plain(taxon.to_string()));
+                shallows.insert(Slug::new(slug), section);
+            }
+
+            // The wrapper opts out of numbering, but a block inside it opts
+            // back in — the comment on `section_to_html` promises exactly this.
+            shallows.insert(
+                Slug::new("wrapper"),
+                shallow_section_with_content(
+                    "wrapper",
+                    "Wrapper",
+                    HTMLContent::Lazy(vec![embed_opt("/inner", Some(true))]),
+                ),
+            );
+            let mut inner = shallow_section("inner", "inner");
+            inner.metadata.0.insert(
+                KEY_TAXON.to_string(),
+                HTMLContent::Plain("remark".to_string()),
+            );
+            shallows.insert(Slug::new("inner"), inner);
+
+            let state = compile_all(&shallows).unwrap();
+            let root = state.compiled().get(&Slug::new("index")).unwrap();
+            let html = Writer::html_doc(root, &state).unwrap().0;
+
+            assert_eq!(
+                labels(&html),
+                vec!["", "Definition 1.", "", "Remark 2.", "Definition 3."],
+                "the number taken inside the wrapper must advance the page's sequence"
+            );
         });
     }
 

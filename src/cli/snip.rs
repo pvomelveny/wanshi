@@ -24,6 +24,11 @@ pub fn snip(command: &SnipCommand) -> eyre::Result<()> {
 
     if command.katex {
         katex_snippets()?;
+    } else {
+        // The KaTeX file is the only snippet generator left, but it stays
+        // opt-in behind its flag; a bare `wanshi snip` used to exit 0 having
+        // silently done nothing at all.
+        println!("Nothing to do. Pass `--katex` to generate `.vscode/katex.code-snippets`.");
     }
 
     Ok(())

@@ -104,20 +104,32 @@ fn parse_u32_prefix(token: &str) -> Option<u32> {
         .flatten()
 }
 
-fn validate_ymd(year: u32, month: u8, day: u8) -> Option<(u32, u8, u8)> {
+/// Whether `year-month-day` names a real Gregorian date.
+///
+/// Shared by the date parsing here and the RFC 822 formatting in the RSS feed,
+/// so the two can never disagree about which dates exist.
+pub(crate) fn is_valid_calendar_date(year: u32, month: u8, day: u8) -> bool {
     let max_day = match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 => {
-            if year.is_multiple_of(400) || (year.is_multiple_of(4) && !year.is_multiple_of(100)) {
+            if is_leap_year(year) {
                 29
             } else {
                 28
             }
         }
-        _ => return None,
+        _ => return false,
     };
-    (day != 0 && day <= max_day).then_some((year, month, day))
+    day != 0 && day <= max_day
+}
+
+fn is_leap_year(year: u32) -> bool {
+    year.is_multiple_of(400) || (year.is_multiple_of(4) && !year.is_multiple_of(100))
+}
+
+fn validate_ymd(year: u32, month: u8, day: u8) -> Option<(u32, u8, u8)> {
+    is_valid_calendar_date(year, month, day).then_some((year, month, day))
 }
 
 #[cfg(test)]

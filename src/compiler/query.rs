@@ -33,6 +33,10 @@ struct QueryHit {
     page_title: String,
     taxon: String,
     date: Option<String>,
+    /// The value the listing's `sort:` key selects, captured while the
+    /// section's metadata was at hand — which is what lets any metadata key
+    /// sort a listing, the same way any key sorts a footer.
+    sort_value: String,
 }
 
 /// Replace every listing placeholder in every compiled section with rendered
@@ -134,7 +138,7 @@ fn select(state: &CompileState, spec: &QuerySpec) -> Vec<QueryHit> {
         // A listing never includes the page it is written on.
         .filter(|&slug| slug != spec.owner)
         .filter(|&slug| matches_filters(state, slug, spec))
-        .filter_map(|slug| hit(state, slug))
+        .filter_map(|slug| hit(state, slug, spec.sort.trim()))
         .collect();
 
     sort_hits(&mut hits, spec);
@@ -273,46 +277,55 @@ fn matches_filters(state: &CompileState, slug: Slug, spec: &QuerySpec) -> bool {
     true
 }
 
-fn hit(state: &CompileState, slug: Slug) -> Option<QueryHit> {
+fn hit(state: &CompileState, slug: Slug, sort_key: &str) -> Option<QueryHit> {
     let section = state.compiled().get(&slug)?;
     let metadata = &section.metadata;
+    let title = metadata
+        .get_str(KEY_TITLE)
+        .cloned()
+        .unwrap_or_else(|| slug.to_string());
+    let page_title = metadata
+        .page_title()
+        .cloned()
+        .unwrap_or_else(|| slug.to_string());
+    let taxon = metadata.get_str(KEY_TAXON).cloned().unwrap_or_default();
+    let date = metadata.get_str(KEY_DATE).cloned();
+
+    // Any metadata key may sort a listing, exactly as any key may sort a
+    // footer (`Writer::footer_sort_value`). An unrecognized key used to fall
+    // through to an empty string, so `sort: "author"` silently ordered by the
+    // slug tiebreak and nothing else.
+    let sort_value = match sort_key {
+        "slug" => slug.to_string(),
+        // Sorting by title uses the page title — the plain-text form — so
+        // markup in a display title cannot decide its position.
+        KEY_TITLE => page_title.clone(),
+        KEY_TAXON => taxon.clone(),
+        KEY_DATE => date.clone().unwrap_or_default(),
+        key => metadata.get_str(key).cloned().unwrap_or_default(),
+    };
+
     Some(QueryHit {
         slug,
-        title: metadata
-            .get_str(KEY_TITLE)
-            .cloned()
-            .unwrap_or_else(|| slug.to_string()),
-        page_title: metadata
-            .page_title()
-            .cloned()
-            .unwrap_or_else(|| slug.to_string()),
-        taxon: metadata.get_str(KEY_TAXON).cloned().unwrap_or_default(),
-        date: metadata.get_str(KEY_DATE).cloned(),
+        title,
+        page_title,
+        taxon,
+        date,
+        sort_value,
     })
 }
 
 fn sort_hits(hits: &mut [QueryHit], spec: &QuerySpec) {
     let key = spec.sort.trim();
     hits.sort_by(|left, right| {
-        let ordering =
-            footer_sort::compare_values(key, &sort_value(left, key), &sort_value(right, key))
-                // Slug breaks ties so output stays stable across builds.
-                .then_with(|| left.slug.cmp(&right.slug));
+        let ordering = footer_sort::compare_values(key, &left.sort_value, &right.sort_value)
+            // Slug breaks ties so output stays stable across builds.
+            .then_with(|| left.slug.cmp(&right.slug));
         match spec.order {
             QueryOrder::Ascending => ordering,
             QueryOrder::Descending => ordering.reverse(),
         }
     });
-}
-
-fn sort_value(hit: &QueryHit, key: &str) -> String {
-    match key {
-        "slug" => hit.slug.to_string(),
-        "title" => hit.page_title.clone(),
-        "taxon" => hit.taxon.clone(),
-        KEY_DATE => hit.date.clone().unwrap_or_default(),
-        _ => String::new(),
-    }
 }
 
 fn hits_html(hits: &[QueryHit]) -> String {
@@ -461,6 +474,32 @@ mod tests {
         assert_eq!(
             slugs_of(&state, &query),
             vec!["notes/bob", "notes/deep/carol"]
+        );
+    }
+
+    /// Any metadata key sorts a listing, the way any key already sorts a
+    /// footer. Sections without the key sort on the empty string, ahead of
+    /// everything that has one.
+    #[test]
+    fn test_sort_by_a_custom_metadata_key() {
+        let mut shallows = forest();
+        for (slug, author) in [("notes/alice", "Zoe"), ("notes/bob", "Abe")] {
+            shallows
+                .get_mut(&Slug::new(slug))
+                .expect("forest section")
+                .metadata
+                .0
+                .insert("author".to_string(), HTMLContent::Plain(author.to_string()));
+        }
+        let state = compile_all_without_missing_index_warning(&shallows).unwrap();
+
+        let mut query = spec("notes/index", QueryScope::Children);
+        query.sort = "author".to_string();
+
+        assert_eq!(
+            slugs_of(&state, &query),
+            vec!["notes/deep/index", "notes/bob", "notes/alice"],
+            "a custom key must order the listing, not fall back to slug order"
         );
     }
 

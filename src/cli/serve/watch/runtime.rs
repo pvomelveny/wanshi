@@ -94,25 +94,16 @@ where
         };
 
         match res {
-            Ok(Ok(event)) => {
-                // Generally, we only need to listen for changes in file content `ModifyKind::Data(_)`,
-                // but since notify-rs always only gets `Modify(Any)` on Windows,
-                // we expand the listening scope here.
-                if let Some(paths) = collect_event_paths(event, strategy) {
-                    batcher.push_paths(paths, Instant::now());
+            Ok(message) => {
+                absorb_watch_message(message, &mut batcher, strategy);
+                // Drain whatever else is already queued. One loop over the
+                // payload, not one loop per variant: `while let Ok(Ok(..))`
+                // stopped at the first error *after consuming it*, and its
+                // twin for errors symmetrically consumed and dropped a real
+                // event — a missed rebuild whenever the two interleaved.
+                while let Ok(message) = rx.try_recv() {
+                    absorb_watch_message(message, &mut batcher, strategy);
                 }
-
-                while let Ok(Ok(event)) = rx.try_recv() {
-                    if let Some(paths) = collect_event_paths(event, strategy) {
-                        batcher.push_paths(paths, Instant::now());
-                    }
-                }
-                while let Ok(Err(error)) = rx.try_recv() {
-                    color_print::ceprintln!("<r>[watch] Error: {error:?}</>");
-                }
-            }
-            Ok(Err(error)) => {
-                color_print::ceprintln!("<r>[watch] Error: {error:?}</>");
             }
             Err(RecvTimeoutError::Timeout) => {
                 let Some(changed_paths) = batcher.take_ready(Instant::now()) else {
@@ -150,6 +141,28 @@ where
     Ok(())
 }
 
+/// Feed one watcher message into the batcher, or report it.
+///
+/// Generally only content changes (`ModifyKind::Data(_)`) would matter, but
+/// notify-rs reports everything as `Modify(Any)` on Windows, so the strategy's
+/// event filter is deliberately broad.
+fn absorb_watch_message(
+    message: notify::Result<notify::Event>,
+    batcher: &mut WatchBatcher,
+    strategy: WatchStrategy,
+) {
+    match message {
+        Ok(event) => {
+            if let Some(paths) = collect_event_paths(event, strategy) {
+                batcher.push_paths(paths, Instant::now());
+            }
+        }
+        Err(error) => {
+            color_print::ceprintln!("<r>[watch] Error: {error:?}</>");
+        }
+    }
+}
+
 fn collect_event_paths(event: notify::Event, strategy: WatchStrategy) -> Option<Vec<Utf8PathBuf>> {
     if !(strategy.should_handle_event)(&event.kind) {
         return None;
@@ -161,4 +174,45 @@ fn collect_event_paths(event: notify::Event, strategy: WatchStrategy) -> Option<
             .filter_map(|path| Utf8PathBuf::from_path_buf(path.clone()).ok())
             .collect::<Vec<_>>(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, time::Duration};
+
+    use notify::{event::ModifyKind, EventKind};
+
+    use super::*;
+
+    /// An error arriving between two events must cost neither of them. The old
+    /// drain ran one `while let Ok(Ok(..))` loop and then one for errors; each
+    /// stopped at the other's variant *after consuming it*, so an interleaved
+    /// batch silently dropped a change and the rebuild never happened.
+    #[test]
+    fn test_events_survive_an_interleaved_error() {
+        let strategy = default_watch_strategy();
+        let mut batcher = WatchBatcher::new(Duration::ZERO);
+        let event = |path: &str| {
+            notify::Event::new(EventKind::Modify(ModifyKind::Any)).add_path(PathBuf::from(path))
+        };
+
+        absorb_watch_message(Ok(event("trees/a.typ")), &mut batcher, strategy);
+        absorb_watch_message(
+            Err(notify::Error::generic("transient watcher error")),
+            &mut batcher,
+            strategy,
+        );
+        absorb_watch_message(Ok(event("trees/b.typ")), &mut batcher, strategy);
+
+        let ready = batcher
+            .take_ready(std::time::Instant::now())
+            .expect("both events should be batched");
+        assert_eq!(
+            ready,
+            vec![
+                Utf8PathBuf::from("trees/a.typ"),
+                Utf8PathBuf::from("trees/b.typ")
+            ]
+        );
+    }
 }

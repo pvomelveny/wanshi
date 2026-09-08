@@ -30,7 +30,9 @@ pub fn html_doc(
             r#"
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width">"#
-            (format!("<title>{page_title}</title>"))
+            // The page title is plain text, so it is escaped here; a `&` or
+            // `<` in a note's title must not end up as markup in the head.
+            (format!("<title>{}</title>", htmlize::escape_text(page_title)))
             (html_favicon_link())
             (html_feed_link())
             (html_import_meta())
@@ -548,6 +550,19 @@ base-url = "/notes/"
     fn test_html_live_reload_disabled_outside_serve_mode() {
         environment::mock_environment().unwrap();
         assert!(html_live_reload().is_empty());
+    }
+
+    /// The page title is plain text; a `<` or `&` in it must reach the head as
+    /// character data, not markup.
+    #[test]
+    fn test_html_doc_escapes_the_title_element() {
+        environment::mock_environment().unwrap();
+
+        let html = html_doc("A < B & C", "", "body", "", "");
+        assert!(
+            html.contains("<title>A &lt; B &amp; C</title>"),
+            "got: {html}"
+        );
     }
 
     #[test]

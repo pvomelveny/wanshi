@@ -28,19 +28,37 @@ use std::{borrow::Cow, collections::HashSet, str};
 ///
 /// `None` and `auto` both mean "unset", which is how a block says it wants
 /// whatever the page chose. Everything else reads as [`parse_bool`] does.
-fn parse_tristate(m: Option<&Cow<'_, str>>) -> Option<bool> {
+fn parse_tristate(m: Option<&Cow<'_, str>>, attr: &str, source_slug: Slug) -> Option<bool> {
     match m.map(|s| s.as_ref()) {
         None | Some("auto") => None,
-        Some("false") | Some("0") | Some("none") => Some(false),
-        _ => Some(true),
+        Some(value) => Some(parse_bool_value(value, attr, source_slug)),
     }
 }
 
-fn parse_bool(m: Option<&Cow<'_, str>>, def: bool) -> bool {
+fn parse_bool(m: Option<&Cow<'_, str>>, def: bool, attr: &str, source_slug: Slug) -> bool {
     match m.map(|s| s.as_ref()) {
         None | Some("auto") => def,
-        Some("false") | Some("0") | Some("none") => false,
-        _ => true,
+        Some(value) => parse_bool_value(value, attr, source_slug),
+    }
+}
+
+/// A decided boolean attribute. Anything unrecognized still reads as `true` —
+/// the historical behaviour, kept so no existing site changes meaning — but is
+/// warned about: `numbering: "flase"` silently doing the opposite of what its
+/// author typed is a mis-render with no thread to pull on.
+fn parse_bool_value(value: &str, attr: &str, source_slug: Slug) -> bool {
+    match value {
+        "false" | "0" | "none" => false,
+        "true" | "1" | "yes" => true,
+        other => {
+            color_print::ceprintln!(
+                "<y>Warning: unrecognized value `{}` for `{}` in `{}`; reading it as `true`.</>",
+                other,
+                attr,
+                source_slug
+            );
+            true
+        }
     }
 }
 
@@ -114,9 +132,20 @@ fn parse_typst_html(
 
                 let url = attr("url")?.to_string();
                 let title = value();
-                let numbering = parse_tristate(span.attrs.get("numbering"));
-                let details_open = parse_bool(span.attrs.get("open"), def.details_open);
-                let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
+                let numbering =
+                    parse_tristate(span.attrs.get("numbering"), "numbering", source_slug);
+                let details_open = parse_bool(
+                    span.attrs.get("open"),
+                    def.details_open,
+                    "open",
+                    source_slug,
+                );
+                let catalog = parse_bool(
+                    span.attrs.get("catalog"),
+                    def.catalog,
+                    "catalog",
+                    source_slug,
+                );
                 builder.push(LazyContent::Embed(EmbedContent {
                     url,
                     title,
@@ -180,6 +209,8 @@ fn parse_typst_html(
                     include_indexes: parse_bool(
                         span.attrs.get("include-indexes"),
                         crate::compiler::section::include_indexes_default(),
+                        "include-indexes",
+                        source_slug,
                     ),
                 }))
             }
@@ -218,9 +249,20 @@ fn parse_typst_html(
                 };
 
                 let def = SectionOption::default();
-                let numbering = parse_tristate(span.attrs.get("numbering"));
-                let details_open = parse_bool(span.attrs.get("open"), def.details_open);
-                let catalog = parse_bool(span.attrs.get("catalog"), def.catalog);
+                let numbering =
+                    parse_tristate(span.attrs.get("numbering"), "numbering", source_slug);
+                let details_open = parse_bool(
+                    span.attrs.get("open"),
+                    def.details_open,
+                    "open",
+                    source_slug,
+                );
+                let catalog = parse_bool(
+                    span.attrs.get("catalog"),
+                    def.catalog,
+                    "catalog",
+                    source_slug,
+                );
                 let option = SectionOption::new(numbering, details_open, catalog);
 
                 let title = span
@@ -401,20 +443,36 @@ pub fn parse_typst_sections<P: AsRef<Utf8Path>>(
 
 #[cfg(test)]
 mod tests {
+    fn tristate(value: Option<&str>) -> Option<bool> {
+        super::parse_tristate(
+            value.map(Cow::from).as_ref(),
+            "numbering",
+            crate::slug::Slug::new("test/note"),
+        )
+    }
+
     #[test]
     fn test_parse_tristate_defers_when_unset_or_auto() {
-        assert_eq!(super::parse_tristate(None), None);
-        assert_eq!(super::parse_tristate(Some(&Cow::from("auto"))), None);
+        assert_eq!(tristate(None), None);
+        assert_eq!(tristate(Some("auto")), None);
     }
 
     #[test]
     fn test_parse_tristate_reads_explicit_answers() {
         for off in ["false", "0", "none"] {
-            assert_eq!(super::parse_tristate(Some(&Cow::from(off))), Some(false));
+            assert_eq!(tristate(Some(off)), Some(false));
         }
         for on in ["true", "1", "yes"] {
-            assert_eq!(super::parse_tristate(Some(&Cow::from(on))), Some(true));
+            assert_eq!(tristate(Some(on)), Some(true));
         }
+    }
+
+    /// Unrecognized values keep their historical meaning — `true` — so no
+    /// existing site changes; the warning (asserted by eye, it goes to stderr)
+    /// is what turns a typo from a silent mis-render into a lead.
+    #[test]
+    fn test_parse_tristate_reads_a_typo_as_true_rather_than_failing() {
+        assert_eq!(tristate(Some("flase")), Some(true));
     }
 
     use super::*;

@@ -257,7 +257,36 @@ pub fn html_header_nav(title: &str, page_title: &str, href: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{catalog_bullet, html_link, CATALOG_BULLET_SYMBOLS};
+    use super::{catalog_bullet, catalog_item, html_link, CatalogItemArgs, CATALOG_BULLET_SYMBOLS};
+
+    /// The tooltip carries the page title as plain text, so a quote in a note's
+    /// title must not terminate the attribute and spill into the tag — while
+    /// the visible title is a body and keeps whatever markup it carries.
+    #[test]
+    fn test_catalog_item_escapes_the_title_attribute_but_not_the_body() {
+        crate::environment::mock_environment().unwrap();
+
+        let html = catalog_item(CatalogItemArgs {
+            slug: crate::slug::Slug::new("a"),
+            title: "A <em>quoted</em> title",
+            page_title: r#"A "quoted" & title"#,
+            details_open: true,
+            taxon: "",
+            number: "",
+            child_html: "",
+            use_hash_href: false,
+            level: 1,
+        });
+
+        assert!(
+            html.contains(r#"title="A &quot;quoted&quot; &amp; title [a]""#),
+            "attribute must be escaped: {html}"
+        );
+        assert!(
+            html.contains("<em>quoted</em>"),
+            "the visible title is markup and stays markup: {html}"
+        );
+    }
 
     #[test]
     fn test_catalog_bullet_differs_for_each_level_of_the_palette() {
