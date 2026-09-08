@@ -60,15 +60,16 @@ fn compile_all_with_missing_index_warning(
 
     let mut state = CompileState::new(residued);
     let index = Slug::new(INDEX_SLUG);
-    if emit_missing_index_warning && state.compile(shallows, index)?.is_none() {
+    // The index is always compiled first so the graph grows from the entry
+    // point; the flag only decides whether its absence is worth a warning.
+    let index_is_missing = state.compile(shallows, index)?.is_none();
+    if emit_missing_index_warning && index_is_missing {
         color_print::ceprintln!(
             "<y>Warning: Missing `{}` section, please provide `{}.{}`.</>",
             INDEX_SLUG,
             INDEX_SLUG,
             crate::slug::Ext::Typ
         );
-    } else if !emit_missing_index_warning {
-        let _ = state.compile(shallows, index)?;
     }
 
     /*
