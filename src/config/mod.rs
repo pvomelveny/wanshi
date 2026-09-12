@@ -131,4 +131,23 @@ mod test {
         assert_eq!(config.serve.output, serve.output);
         assert!(config.publish.rss);
     }
+
+    // Regression test: `Serve` was the one config struct without
+    // `#[serde(default)]` on the container, so a `[serve]` table overriding a
+    // single key failed every command with `missing field`.
+    #[test]
+    fn test_partial_serve_table_fills_in_defaults() {
+        let serve = crate::config::Serve::default();
+        let config = crate::config::parse_config(
+            r#"
+            [serve]
+            edit = "zed://file/"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.serve.edit.as_deref(), Some("zed://file/"));
+        assert_eq!(config.serve.output, serve.output);
+        assert_eq!(config.serve.command, serve.command);
+    }
 }
