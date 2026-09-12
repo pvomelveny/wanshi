@@ -95,11 +95,14 @@ impl<'a> HTMLParser<'a> {
             fn local(alt: u8) -> String {
                 format!(r#"wanshi-(?<tag{}>local)"#, alt)
             }
+            // A value runs to the next `"`, full stop. Typst entity-escapes
+            // `"` inside attribute values and emits `\` verbatim, so treating
+            // `\"` as an escaped quote (an escape scheme HTML does not have)
+            // consumed the real closing quote after a value ending in `\` —
+            // the tag then failed to match at all and the parser reported the
+            // orphaned closing tag, nowhere near the cause.
             fn attrs(alt: u8) -> String {
-                format!(
-                    r#"(?<attrs{}>(\s+([a-zA-Z-]+)(="([^"\\]|\\[\s\S])*")?)*)"#,
-                    alt
-                )
+                format!(r#"(?<attrs{}>(\s+([a-zA-Z-]+)(="[^"]*")?)*)"#, alt)
             }
             Regex::new(&format!(
                 r#"<span>\s*({}<{}{}>)|({}</{}>)\s*</span>|<{}{}>|</{}>"#,
@@ -242,9 +245,10 @@ impl<'a> Iterator for HTMLParser<'a> {
             close_tag.mid.inspect(|mid| close_tag.end = *mid);
         }
 
-        static RE_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r#"(?<key>[a-zA-Z-]+)(="(?<value>([^"\\]|\\[\s\S])*)")?"#).unwrap()
-        });
+        // Same value shape as the `attrs` group in [`HTMLParser::new`]: no
+        // backslash escapes exist in HTML, entities are undone below.
+        static RE_ATTR: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"(?<key>[a-zA-Z-]+)(="(?<value>[^"]*)")?"#).unwrap());
 
         let mut attrs: HashMap<&str, Cow<'_, str>> = HashMap::new();
         for c in RE_ATTR.captures_iter(attrs_str) {
@@ -307,5 +311,34 @@ mod tests {
         assert!(matches!(parsed[0].kind, HTMLTagKind::Outdent));
         assert!(parsed[0].body.is_empty());
         assert!(parsed[0].attrs.is_empty());
+    }
+
+    // Regression test: the attribute regexes treated `\"` as an escaped quote,
+    // an escape scheme HTML does not have — typst emits `\` verbatim and
+    // entity-escapes `"`. A value whose last character was `\` (a Windows
+    // path, a TeX fragment) swallowed its own closing quote, the open tag
+    // never matched, and the build failed on the "orphaned" closing tag with
+    // an error pointing nowhere near the cause.
+    #[test]
+    fn test_attribute_value_ending_in_a_backslash_parses() {
+        let html = r#"<wanshi-meta key="path" value="C:\dir\"></wanshi-meta>"#;
+        let parsed = HTMLParser::new(html)
+            .map(|m| m.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(
+            parsed[0].attrs.get("value").map(Cow::as_ref),
+            Some(r"C:\dir\")
+        );
+
+        // Entity-escaped quotes still round-trip.
+        let html = r#"<wanshi-meta key="t" value="say &quot;hi&quot;"></wanshi-meta>"#;
+        let parsed = HTMLParser::new(html)
+            .map(|m| m.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            parsed[0].attrs.get("value").map(Cow::as_ref),
+            Some(r#"say "hi""#)
+        );
     }
 }
