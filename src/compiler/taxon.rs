@@ -40,10 +40,15 @@ impl Taxon {
 }
 
 /// Uppercase the first character, leaving the rest alone.
+///
+/// Split on the first `char`, not at byte 1: `split_at_checked(1)` returned
+/// `None` for any multibyte first character, so `état` stayed lowercase in
+/// HTML while the paged output capitalised it — the two targets disagreed.
 fn capitalize(s: &str) -> String {
-    match s.split_at_checked(1) {
-        Some((first, rest)) => first.to_uppercase() + rest,
-        _ => s.to_string(),
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 
@@ -96,6 +101,16 @@ mod tests {
     #[test]
     fn test_display_taxon_handles_multibyte_first_char() {
         assert_eq!(display_taxon("参考"), "参考.");
+    }
+
+    // Regression test: the byte-1 split returned `None` for a multibyte first
+    // character, so a taxon like `état` was never capitalised in HTML — while
+    // the paged output's `taxon-upper` did capitalise it. CJK never caught
+    // this because uppercase is the identity there.
+    #[test]
+    fn test_display_taxon_capitalizes_a_multibyte_first_letter() {
+        assert_eq!(display_taxon("état"), "État.");
+        assert_eq!(display_taxon("übung"), "Übung.");
     }
 
     #[test]
