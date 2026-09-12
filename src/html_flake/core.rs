@@ -277,7 +277,7 @@ mod tests {
     /// the visible title is a body and keeps whatever markup it carries.
     #[test]
     fn test_catalog_item_escapes_the_title_attribute_but_not_the_body() {
-        crate::environment::mock_environment().unwrap();
+        let _guard = crate::environment::mock_environment();
 
         let html = catalog_item(CatalogItemArgs {
             slug: crate::slug::Slug::new("a"),
@@ -307,7 +307,7 @@ mod tests {
     /// needs its own JS-level escape or the click dies on a SyntaxError.
     #[test]
     fn test_catalog_item_escapes_the_onclick_for_javascript() {
-        crate::environment::mock_environment().unwrap();
+        let _guard = crate::environment::mock_environment();
 
         let html = catalog_item(CatalogItemArgs {
             slug: crate::slug::Slug::new("bloom's-note"),

@@ -219,14 +219,20 @@ fn lock_test_env_mutex() -> std::sync::MutexGuard<'static, ()> {
     }
 }
 
-/// Mock environment for testing purposes.
-#[allow(dead_code)]
-pub fn mock_environment() -> eyre::Result<()> {
-    #[cfg(test)]
-    let _guard = lock_test_env_mutex();
-
+/// Reset the global environment to defaults for a test, and hand back the
+/// test-environment mutex guard.
+///
+/// The caller must hold the guard for its whole test body — bind it as
+/// `let _guard = …`, never `let _ = …` — because the environment is global:
+/// releasing the lock after setup looked serialised but let a concurrently
+/// running `with_test_environment` swap the root and build mode mid-assertion,
+/// exactly the race the mutex exists to prevent.
+#[cfg(test)]
+#[must_use = "hold the guard for the whole test body, or the environment races"]
+pub fn mock_environment() -> std::sync::MutexGuard<'static, ()> {
+    let guard = lock_test_env_mutex();
     update_environment(default_environment());
-    Ok(())
+    guard
 }
 
 #[cfg(test)]
