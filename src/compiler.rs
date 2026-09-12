@@ -317,7 +317,7 @@ fn load_shallow_sections(
     dirty_paths: Option<&DirtySet>,
 ) -> eyre::Result<ParsedSections> {
     let relative_path = source_relative_path(source_slug, ext);
-    let is_modified = is_source_modified(relative_path.as_path(), dirty_paths)
+    let (is_modified, pending_hash) = is_source_modified(relative_path.as_path(), dirty_paths)
         .wrap_err_with(|| eyre!("failed to verify hash of `{relative_path}`"))?;
     let entry_path = environment::entry_file_path(&relative_path);
 
@@ -331,5 +331,10 @@ fn load_shallow_sections(
 
     let sections = parse_source_sections(source_slug, ext)?;
     write_entry_cache(entry_path.as_path(), &sections)?;
+    // Only now that the parse has landed: a hash recorded before a parse that
+    // then failed made the next build serve the stale entry cache and exit 0.
+    if let Some(hash) = pending_hash {
+        environment::record_hash(&relative_path, hash)?;
+    }
     Ok(sections)
 }

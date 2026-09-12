@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use eyre::{eyre, WrapErr};
 
 use crate::{
-    environment::{self, verify_and_file_hash},
+    environment::{self, verify_source_hash},
     slug::{Ext, Slug},
 };
 
@@ -85,11 +85,17 @@ impl ServeCompileSession {
                 continue;
             };
             let relative_path = source_relative_path(slug, ext);
-            let _ = verify_and_file_hash(relative_path.as_path())
+            let (source_changed, source_hash) = verify_source_hash(relative_path.as_path())
                 .wrap_err_with(|| eyre!("failed to verify hash of `{relative_path}`"))?;
             let entry_path = environment::entry_file_path(relative_path.as_path());
             let sections = parse_source_sections(slug, ext)?;
             write_entry_cache(entry_path.as_path(), &sections)?;
+            // Only now that the parse has landed: a hash recorded before a
+            // parse that then failed made the next cold build serve the stale
+            // entry cache and exit 0.
+            if source_changed {
+                environment::record_hash(relative_path.as_path(), source_hash)?;
+            }
 
             if let Some(previous_slugs) = self.source_sections.remove(&slug) {
                 for previous_slug in previous_slugs {

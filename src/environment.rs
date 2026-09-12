@@ -30,7 +30,7 @@ pub use config_access::{
     theme_paths, toc_max_width, trees_dir, trees_dir_without_root, typst_root_dir, FEED_NAME,
     SEARCH_INDEX_NAME,
 };
-pub use hashing::{record_hash, verify_and_file_hash, verify_hash};
+pub use hashing::{record_hash, verify_hash, verify_source_hash};
 pub use imports::{
     default_import_math_html, import_fonts_html, import_footer_html, import_header_html,
     import_math_html, import_meta_html, import_style_html, IMPORT_FILE_NAMES,

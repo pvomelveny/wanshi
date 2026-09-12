@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::{
-    environment::verify_and_file_hash,
+    environment::verify_source_hash,
     slug::{Ext, Slug},
 };
 
@@ -17,24 +17,32 @@ pub(super) fn source_relative_path(slug: Slug, ext: Ext) -> Utf8PathBuf {
     Utf8PathBuf::from(format!("{}.{}", slug, ext))
 }
 
+/// Whether the source needs reparsing, along with the hash the caller must
+/// hand to [`crate::environment::record_hash`] once the parse has landed in
+/// the entry cache — `None` when the recorded baseline is already current.
+///
+/// The caller records rather than this function, so that a parse which then
+/// fails leaves the source visibly modified for the next build instead of
+/// silently serving the stale entry cache.
 pub(super) fn is_source_modified(
     relative_path: &Utf8Path,
     dirty_paths: Option<&DirtySet>,
-) -> eyre::Result<bool> {
+) -> eyre::Result<(bool, Option<u64>)> {
     if *crate::cli::build::no_cache_enabled() {
-        return Ok(true);
+        return Ok((true, None));
     }
 
     if let Some(dirty_paths) = dirty_paths {
         if dirty_paths.contains(relative_path) {
-            // Keep hash baseline updated for subsequent cold builds.
-            let _ = verify_and_file_hash(relative_path)?;
-            return Ok(true);
+            // Keep the hash baseline current for subsequent cold builds.
+            let (changed, hash) = verify_source_hash(relative_path)?;
+            return Ok((true, changed.then_some(hash)));
         }
-        return Ok(false);
+        return Ok((false, None));
     }
 
-    verify_and_file_hash(relative_path)
+    let (changed, hash) = verify_source_hash(relative_path)?;
+    Ok((changed, changed.then_some(hash)))
 }
 
 pub fn expand_dirty_paths(workspace: &Workspace, dirty_paths: &DirtySet) -> DirtySet {
