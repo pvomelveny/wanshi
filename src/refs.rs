@@ -108,8 +108,7 @@ impl Bibliography {
 /// Brace counting rather than a regex because a BibTeX field is itself
 /// brace-delimited and nests arbitrarily — `title = {The {LLL} algorithm}` ends
 /// three braces deep. Quotes are not tracked: a `}` inside a quoted value is
-/// still balanced in practice, and miscounting would only ever extend the slice
-/// to the next entry, which the leading-`@` check below catches.
+/// still balanced in practice.
 fn extract_biblatex_entry<'a>(raw: &'a str, key: &str) -> Option<&'a str> {
     let mut search_from = 0;
     while let Some(at) = raw[search_from..].find('@') {
@@ -118,6 +117,16 @@ fn extract_biblatex_entry<'a>(raw: &'a str, key: &str) -> Option<&'a str> {
             Some(offset) => start + offset,
             None => return None,
         };
+        // An entry starts as `@type{`, letters only between the two. Anything
+        // else — a Mastodon handle in a `url`, an email in a `note` — is a
+        // stray `@` inside a field value; taking it for an entry start made
+        // the returned slice begin mid-value and drag the tail of the
+        // preceding entry along with it.
+        let entry_type = raw[start + 1..open].trim();
+        if entry_type.is_empty() || !entry_type.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            search_from = start + 1;
+            continue;
+        }
         let found_key = raw[open + 1..]
             .split([',', '\n'])
             .next()
@@ -784,6 +793,26 @@ mod tests {
     #[test]
     fn test_extract_biblatex_entry_missing_key_is_none() {
         assert!(extract_biblatex_entry(SAMPLE, "nope").is_none());
+    }
+
+    // Regression test: every `@` used to be taken for an entry start, so a
+    // stray one in a field value of the *preceding* entry — here a Mastodon
+    // handle in a `url` — made the returned slice begin mid-value and drag
+    // that entry's tail in front of the requested one.
+    #[test]
+    fn test_extract_biblatex_entry_ignores_at_signs_inside_field_values() {
+        let raw = "@article{a1,\n  title = {T},\n  url = {https://mastodon.social/@alice},\n}\n\n@article{kkl1988,\n  title = {The Influence of Variables},\n}\n";
+        let entry = extract_biblatex_entry(raw, "kkl1988").expect("found");
+        assert!(
+            entry.starts_with("@article{kkl1988,"),
+            "slice must start at the entry, got: {entry}"
+        );
+        assert!(!entry.contains("alice"));
+
+        // The stray `@` must not hide the entry it sits inside, either.
+        let first = extract_biblatex_entry(raw, "a1").expect("found");
+        assert!(first.starts_with("@article{a1,"));
+        assert!(first.ends_with('}'));
     }
 
     #[test]
