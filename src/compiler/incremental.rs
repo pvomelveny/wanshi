@@ -77,13 +77,6 @@ pub(super) fn affected_slugs_from_dirty(
 ) -> HashSet<Slug> {
     let mut affected = dirty_source_slugs.clone();
 
-    // A listing renders other sections, so any change anywhere can alter it.
-    // These pages are still hash-guarded on write, so rewriting them costs
-    // nothing when the rendered result is unchanged.
-    if !dirty_source_slugs.is_empty() {
-        affected.extend(state.query_owners().iter().copied());
-    }
-
     // Resolve every section's effective parent once. This has to cover all
     // compiled sections rather than only those with recorded callbacks: a
     // section that nothing embeds still inherits a directory index as its
@@ -96,24 +89,31 @@ pub(super) fn affected_slugs_from_dirty(
 
     // Descendant sections (embedded children) share source ownership with their parent
     // in subtree mode, so source-dirty must include the whole descendant chain.
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for (&slug, &parent) in &effective_parents {
-            if parent != slug && affected.contains(&parent) && affected.insert(slug) {
-                changed = true;
-            }
-        }
+    mark_descendants(&mut affected, &effective_parents);
+
+    // The sections whose *text* changed: the dirty sources plus every section
+    // defined inside them. Linker checks below must use this set rather than
+    // the raw source slugs, because backlink edges name sections — a link
+    // written inside a named subtree records the subtree's slug, which is
+    // never itself a source.
+    let changed_sections = affected.clone();
+
+    // A listing renders other sections, so any change anywhere can alter it.
+    // These pages are still hash-guarded on write, so rewriting them costs
+    // nothing when the rendered result is unchanged.
+    if !dirty_source_slugs.is_empty() {
+        affected.extend(state.query_owners().iter().copied());
+        mark_descendants(&mut affected, &effective_parents);
     }
 
     let mut queue: VecDeque<Slug> = affected.iter().copied().collect();
 
-    // If a linker page changes, the target's backlink list changes too.
+    // If a linker section changes, the target's backlink list changes too.
     for (&target_slug, callback) in &state.callback().0 {
         if callback
             .backlinks
             .iter()
-            .any(|backlink_slug| dirty_source_slugs.contains(backlink_slug))
+            .any(|backlink_slug| changed_sections.contains(backlink_slug))
             && affected.insert(target_slug)
         {
             queue.push_back(target_slug);
@@ -150,6 +150,20 @@ pub(super) fn affected_slugs_from_dirty(
     }
 
     affected
+}
+
+/// Extends `affected` with every section whose effective parent chain reaches
+/// into it, to a fixed point.
+fn mark_descendants(affected: &mut HashSet<Slug>, effective_parents: &HashMap<Slug, Slug>) {
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (&slug, &parent) in effective_parents {
+            if parent != slug && affected.contains(&parent) && affected.insert(slug) {
+                changed = true;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -270,6 +284,47 @@ mod tests {
 
         assert!(affected.contains(&Slug::new("a")));
         assert!(affected.contains(&Slug::new("b")));
+    }
+
+    // Regression test: backlink edges name the linking *section*, and a link
+    // written inside a named subtree records the subtree's slug — which is not
+    // a source slug, so testing linkers against the raw dirty sources let the
+    // target's backlink footer go stale when the subtree's source changed.
+    #[test]
+    fn test_affected_slugs_include_targets_linked_from_a_named_subtree() {
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("a"),
+            shallow(
+                "a",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/a/sub.typst".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+        shallows.insert(
+            Slug::new("a/sub"),
+            shallow(
+                "a/sub",
+                HTMLContent::Lazy(vec![LazyContent::Local(LocalLink {
+                    url: "/t.typst".to_string(),
+                    text: None,
+                })]),
+            ),
+        );
+        shallows.insert(
+            Slug::new("t"),
+            shallow("t", HTMLContent::Plain("<p>t</p>".to_string())),
+        );
+
+        let state = state::compile_all(&shallows).unwrap();
+        let dirty_slugs = HashSet::from([Slug::new("a")]);
+        let affected = affected_slugs_from_dirty(&state, &dirty_slugs);
+
+        assert!(affected.contains(&Slug::new("a/sub")));
+        assert!(affected.contains(&Slug::new("t")));
     }
 
     // Regression test: only the recorded parent was rewritten when an embedded
