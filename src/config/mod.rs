@@ -46,23 +46,38 @@ pub struct Config {
     pub refs: Refs,
 }
 
-/// Try to find toml file in the current directory or the parent directory.
+/// Locate the configuration file.
+///
+/// Only the default path falls back to searching one directory up, so running
+/// a command from a subdirectory of the site still finds the site. An
+/// explicitly named config that does not exist is a hard error, not a search
+/// request: the old fallback quietly loaded `sub/../Wanshi.toml` when
+/// `sub/Custom.toml` was missing — a different file than the one the user
+/// named, applied without a word.
 pub fn find_config(mut toml_file: Utf8PathBuf) -> eyre::Result<Utf8PathBuf> {
     if !toml_file.exists() {
+        let is_default_path = matches!(toml_file.as_str(), DEFAULT_CONFIG_PATH | "Wanshi.toml");
+        if !is_default_path {
+            return Err(eyre::eyre!("cannot find configuration file: {}", toml_file));
+        }
+
         let parent = toml_file
             .parent()
             .ok_or_else(|| eyre::eyre!("cannot resolve parent directory of `{}`", toml_file))?
             .canonicalize_utf8()?;
         let parent = parent.parent().ok_or_else(|| {
             eyre::eyre!(
-                "cannot find configuration file from root directory while searching from `{}`",
+                "cannot find configuration file: {} (also looked one directory up)",
                 toml_file
             )
         })?;
 
         toml_file = parent.join(DEFAULT_CONFIG_PATH);
         if !toml_file.exists() {
-            return Err(eyre::eyre!("cannot find configuration file: {}", toml_file));
+            return Err(eyre::eyre!(
+                "cannot find configuration file: {} (also looked one directory up)",
+                toml_file
+            ));
         }
     }
     Ok(toml_file)
@@ -137,6 +152,23 @@ mod test {
         assert_eq!(config.serve.edit, serve.edit);
         assert_eq!(config.serve.output, serve.output);
         assert!(config.publish.rss);
+    }
+
+    // Regression test: a missing explicitly named config silently fell back
+    // to the parent directory's `Wanshi.toml` — a different file than the one
+    // the user named. Only the default path may search upward.
+    #[test]
+    fn test_find_config_errors_on_a_missing_explicit_path() {
+        let err = crate::config::find_config(camino::Utf8PathBuf::from(
+            "definitely-missing-dir/Custom.toml",
+        ))
+        .unwrap_err();
+        let message = format!("{err}");
+        assert!(message.contains("Custom.toml"), "got: {message}");
+        assert!(
+            !message.contains("directory up"),
+            "an explicit path must not trigger the parent search: {message}"
+        );
     }
 
     // Regression test: URL builders concatenate paths directly onto
