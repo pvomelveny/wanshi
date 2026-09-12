@@ -148,7 +148,10 @@ pub fn catalog_item(args: CatalogItemArgs<'_>) -> String {
         environment::full_html_url(slug)
     };
     let title_text = format!("{} [{}]", page_title, slug);
-    let onclick = format!("window.location.href='{}'", hash_href);
+    let onclick = format!(
+        "window.location.href='{}'",
+        escape_js_single_quoted(&hash_href)
+    );
 
     let mut class_name: Vec<String> = vec!["entry".to_string()];
     if !details_open {
@@ -242,8 +245,18 @@ pub fn html_link(href: &str, title: &str, text: &str, class_name: &str) -> Strin
     )
 }
 
+/// Escape `value` for interpolation inside a single-quoted JavaScript string.
+///
+/// The `html!` macro escapes attribute values for HTML, but the browser
+/// decodes those entities *before* the JS engine parses an `onclick` handler —
+/// so a `'` or `\` in a slug still terminated the string literal, and the
+/// click died on a SyntaxError. Two escaping layers, one per language.
+fn escape_js_single_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
 pub fn html_header_nav(title: &str, page_title: &str, href: &str) -> String {
-    let onclick = format!("window.location.href='{}'", href);
+    let onclick = format!("window.location.href='{}'", escape_js_single_quoted(href));
     html!(header class="header" {
         nav class="nav" {
             div class="logo" {
@@ -286,6 +299,32 @@ mod tests {
             html.contains("<em>quoted</em>"),
             "the visible title is markup and stays markup: {html}"
         );
+    }
+
+    /// The onclick handler is a JS string inside an HTML attribute. The
+    /// macro's entity escaping keeps the HTML well-formed, but the browser
+    /// decodes it before the JS engine parses the handler, so a `'` in a slug
+    /// needs its own JS-level escape or the click dies on a SyntaxError.
+    #[test]
+    fn test_catalog_item_escapes_the_onclick_for_javascript() {
+        crate::environment::mock_environment().unwrap();
+
+        let html = catalog_item(CatalogItemArgs {
+            slug: crate::slug::Slug::new("bloom's-note"),
+            title: "Bloom's note",
+            page_title: "Bloom's note",
+            details_open: true,
+            taxon: "",
+            number: "",
+            child_html: "",
+            use_hash_href: true,
+            level: 1,
+        });
+
+        let start = html.find("onclick=\"").expect("onclick present") + "onclick=\"".len();
+        let end = html[start..].find('"').expect("attribute closes") + start;
+        let decoded = htmlize::unescape(&html[start..end]);
+        assert_eq!(decoded, r"window.location.href='#bloom\'s-note'");
     }
 
     #[test]
