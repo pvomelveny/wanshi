@@ -108,9 +108,18 @@ pub fn add_project_files(site_path: &Utf8Path) -> eyre::Result<()> {
     std::fs::write(default_assets_dir.join("favicon.ico"), DEFAULT_FAVICON)
         .wrap_err("failed to create default favicon")?;
 
-    // Create the .gitignore
-    std::fs::write(&default_gitignore_path, DEFAULT_GITIGNORE)
-        .wrap_err("failed to create .gitignore")?;
+    // An existing .gitignore is the user's file — `wanshi init` runs in
+    // pre-existing directories by design, and replacing their rules with the
+    // default is the same data loss the config guard above prevents. Kept as
+    // is, with a note saying what wanshi would want ignored.
+    if default_gitignore_path.exists() {
+        println!(
+            "Kept the existing .gitignore; wanshi's own entries are `/.cache` and `.DS_Store`."
+        );
+    } else {
+        std::fs::write(&default_gitignore_path, DEFAULT_GITIGNORE)
+            .wrap_err("failed to create .gitignore")?;
+    }
 
     // Create the default index section in the new site directory
     new_section_inner(
@@ -435,6 +444,27 @@ mod tests {
         );
         let untouched = std::fs::read_to_string(config_path.as_std_path()).unwrap();
         assert_eq!(untouched, customized, "the customized config must survive");
+
+        let _ = std::fs::remove_dir_all(root.as_std_path());
+    }
+
+    /// `wanshi init` replaced an existing hand-written `.gitignore` with the
+    /// built-in default — the same data-loss class as the config overwrite
+    /// guarded above, minus even the error.
+    #[test]
+    fn test_init_keeps_an_existing_gitignore() {
+        let root = crate::test_io::case_dir("init-gitignore-exists");
+        std::fs::create_dir_all(root.as_std_path()).unwrap();
+        let gitignore = root.join(".gitignore");
+        let custom = "node_modules/\n/.cache\n";
+        std::fs::write(gitignore.as_std_path(), custom).unwrap();
+
+        environment::with_test_environment(root.clone(), environment::BuildMode::Publish, || {
+            add_project_files(&root).unwrap();
+        });
+
+        let kept = std::fs::read_to_string(gitignore.as_std_path()).unwrap();
+        assert_eq!(kept, custom, "the user's ignore rules must survive init");
 
         let _ = std::fs::remove_dir_all(root.as_std_path());
     }
