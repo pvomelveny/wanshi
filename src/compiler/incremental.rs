@@ -131,6 +131,17 @@ pub(super) fn affected_slugs_from_dirty(
             continue;
         };
 
+        // Every page that embeds this section renders its content inline, so
+        // all of them go stale with it. `parent` alone cannot answer this: it
+        // holds a single slug, and a declared parent displaces the inferred
+        // embedder entirely — `embedded_by` is the durable record. Hosts are
+        // recorded direct-only; the queue makes the walk transitive.
+        for &host_slug in &callback.embedded_by {
+            if affected.insert(host_slug) {
+                queue.push_back(host_slug);
+            }
+        }
+
         for &backlink_slug in &callback.backlinks {
             if affected.insert(backlink_slug) {
                 queue.push_back(backlink_slug);
@@ -259,6 +270,69 @@ mod tests {
 
         assert!(affected.contains(&Slug::new("a")));
         assert!(affected.contains(&Slug::new("b")));
+    }
+
+    // Regression test: only the recorded parent was rewritten when an embedded
+    // section changed, so every *other* host kept rendering the old content.
+    #[test]
+    fn test_affected_slugs_include_every_host_that_embeds_a_changed_section() {
+        let embed_n = || {
+            HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                url: "/n.typst".to_string(),
+                title: None,
+                option: SectionOption::default(),
+            })])
+        };
+        let mut shallows = HashMap::new();
+        shallows.insert(Slug::new("x"), shallow("x", embed_n()));
+        shallows.insert(Slug::new("y"), shallow("y", embed_n()));
+        shallows.insert(
+            Slug::new("n"),
+            shallow("n", HTMLContent::Plain("<p>n</p>".to_string())),
+        );
+
+        let state = state::compile_all(&shallows).unwrap();
+        let dirty_slugs = HashSet::from([Slug::new("n")]);
+        let affected = affected_slugs_from_dirty(&state, &dirty_slugs);
+
+        assert!(affected.contains(&Slug::new("x")));
+        assert!(affected.contains(&Slug::new("y")));
+    }
+
+    // Regression test: a declared `parent` displaces the embed-inferred one,
+    // and the host that actually renders the section inline was then not
+    // rewritten at all when the section changed.
+    #[test]
+    fn test_affected_slugs_include_the_host_when_the_child_declares_another_parent() {
+        let mut child = shallow("n", HTMLContent::Plain("<p>n</p>".to_string()));
+        child.metadata.0.insert(
+            crate::entry::KEY_PARENT.to_string(),
+            HTMLContent::Plain("elsewhere".to_string()),
+        );
+
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("host"),
+            shallow(
+                "host",
+                HTMLContent::Lazy(vec![LazyContent::Embed(EmbedContent {
+                    url: "/n.typst".to_string(),
+                    title: None,
+                    option: SectionOption::default(),
+                })]),
+            ),
+        );
+        shallows.insert(Slug::new("n"), child);
+        shallows.insert(
+            Slug::new("elsewhere"),
+            shallow("elsewhere", HTMLContent::Plain("<p>e</p>".to_string())),
+        );
+
+        let state = state::compile_all(&shallows).unwrap();
+        let dirty_slugs = HashSet::from([Slug::new("n")]);
+        let affected = affected_slugs_from_dirty(&state, &dirty_slugs);
+
+        assert!(affected.contains(&Slug::new("host")));
     }
 
     #[test]
