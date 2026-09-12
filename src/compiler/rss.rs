@@ -83,7 +83,7 @@ pub(super) fn feed_xml(state: &CompileState) -> eyre::Result<String> {
         output.push_str("    <item>\n");
         push_tag(&mut output, 6, "title", &item.title);
         push_tag(&mut output, 6, "link", &item.link);
-        push_guid_tag(&mut output, 6, item.slug.as_str());
+        push_guid_tag(&mut output, 6, &item.link);
         if let Some(pub_date) = normalize_pub_date(&item.date) {
             push_tag(&mut output, 6, "pubDate", &pub_date);
         }
@@ -341,9 +341,17 @@ fn push_atom_self_link(output: &mut String, href: &str) {
     output.push_str("\" rel=\"self\" type=\"application/rss+xml\" />\n");
 }
 
+/// The item's guid: its full URL, flagged as a permalink.
+///
+/// This used to be the bare slug with `isPermaLink="false"` — stable across a
+/// `base-url` change, but RSS 2.0 wants guids globally unique, and a bare word
+/// like `post` collides with every other feed using the same convention in a
+/// reader that keys on guid alone. The full URL is the conventional choice;
+/// the cost, accepted by the owner, is that moving the site re-shows old
+/// items once.
 fn push_guid_tag(output: &mut String, indent: usize, guid: &str) {
     output.push_str(&" ".repeat(indent));
-    output.push_str(r#"<guid isPermaLink="false">"#);
+    output.push_str(r#"<guid isPermaLink="true">"#);
     output.push_str(&xml_escape(guid));
     output.push_str("</guid>\n");
 }
@@ -419,6 +427,14 @@ mod tests {
             metadata: HTMLMetaData(metadata),
             content: HTMLContent::Plain(content_html.to_string()),
         }
+    }
+
+    /// The guid tag an item for `slug` must carry: its full URL as a permalink.
+    fn guid_tag(slug: &str) -> String {
+        format!(
+            r#"<guid isPermaLink="true">{}</guid>"#,
+            environment::full_html_url(Slug::new(slug))
+        )
     }
 
     fn compile_state_for_feed(item_date: &str, item_content: &str) -> CompileState {
@@ -586,15 +602,16 @@ mod tests {
         assert!(!xml.contains("<pubDate>"), "got: {xml}");
         assert!(!xml.contains("<lastBuildDate>"));
         // The item itself is still published; only the date is dropped.
-        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
+        assert!(xml.contains(&guid_tag("post")));
     }
 
     #[test]
-    fn test_feed_xml_uses_slug_guid_with_non_permalink_flag() {
+    fn test_feed_xml_uses_the_item_link_as_permalink_guid() {
         let state = compile_state_for_feed("2021-08-15", "<p>Hello</p>");
         let xml = feed_xml(&state).unwrap();
         let post_link = environment::full_html_url(Slug::new("post"));
-        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
+        // The guid IS the link: globally unique, and flagged fetchable.
+        assert!(xml.contains(&guid_tag("post")));
         assert!(xml.contains(&format!("<link>{post_link}</link>")));
     }
 
@@ -624,8 +641,8 @@ mod tests {
     fn test_feed_xml_excludes_index_from_items() {
         let state = compile_state_for_feed("2021-08-15", "<p>Hello</p>");
         let xml = feed_xml(&state).unwrap();
-        assert!(!xml.contains(r#"<guid isPermaLink="false">index</guid>"#));
-        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
+        assert!(!xml.contains(&guid_tag("index")));
+        assert!(xml.contains(&guid_tag("post")));
     }
 
     #[test]
@@ -670,7 +687,7 @@ mod tests {
 
         let state = compile_all_without_missing_index_warning(&shallows).unwrap();
         let xml = feed_xml(&state).unwrap();
-        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
+        assert!(xml.contains(&guid_tag("post")));
         assert!(xml.contains("<content:encoded><![CDATA["));
         assert!(xml.contains("child body"));
     }
@@ -695,8 +712,8 @@ mod tests {
 
         let state = compile_all_without_missing_index_warning(&shallows).unwrap();
         let xml = feed_xml(&state).unwrap();
-        assert!(xml.contains(r#"<guid isPermaLink="false">post</guid>"#));
-        assert!(!xml.contains(r#"<guid isPermaLink="false">catalog</guid>"#));
+        assert!(xml.contains(&guid_tag("post")));
+        assert!(!xml.contains(&guid_tag("catalog")));
     }
 
     #[test]
