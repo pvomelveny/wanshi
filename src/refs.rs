@@ -636,10 +636,14 @@ fn full_reference(entry: &Entry) -> String {
 }
 
 /// Join names the way a citation reads them: the last one after "and".
+///
+/// Names pass through [`escape_markup`] like every other content field: rare
+/// as markup characters are in a name, one `_` or `/` would silently
+/// italicise or truncate the whole author line.
 fn name_list(people: &[hayagriva::types::Person]) -> Option<String> {
     let names: Vec<String> = people
         .iter()
-        .map(|person| person.given_first(false))
+        .map(|person| escape_markup(&person.given_first(false)))
         .collect();
     match names.as_slice() {
         [] => None,
@@ -667,10 +671,18 @@ fn author_citation(entry: &Entry) -> Option<String> {
 /// title with `_2`, a filename, an email -- and each is markup in a Typst body.
 /// Unescaped, `Ext_2` silently begins emphasis that runs to the next
 /// underscore, or to the end of the paragraph.
+///
+/// `/` is escaped because a bare `//` starts a Typst line comment that
+/// silently swallows the rest of the reference, and brackets because an
+/// unmatched `]` is a hard compile error for the whole build. All three
+/// render identically escaped, so balanced input loses nothing.
 fn escape_markup(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for ch in value.chars() {
-        if matches!(ch, '_' | '*' | '@' | '#' | '$' | '`' | '<' | '>' | '\\') {
+        if matches!(
+            ch,
+            '_' | '*' | '@' | '#' | '$' | '`' | '<' | '>' | '\\' | '/' | '[' | ']'
+        ) {
             out.push('\\');
         }
         out.push(ch);
@@ -1073,5 +1085,32 @@ mod tests {
         assert_eq!(escape_markup("Ext_2 and Tor_1"), "Ext\\_2 and Tor\\_1");
         assert_eq!(escape_markup("a@b"), "a\\@b");
         assert_eq!(escape_markup("plain"), "plain");
+    }
+
+    /// Regression test: `//` began a Typst line comment that silently dropped
+    /// the rest of the reference, and one unmatched `]` failed the whole
+    /// build. Verified against typst itself: `\/`, `\[` and `\]` all render
+    /// as the bare character, so balanced input loses nothing.
+    #[test]
+    fn test_comment_starts_and_brackets_are_escaped() {
+        assert_eq!(
+            escape_markup("TCP/IP // a history"),
+            "TCP\\/IP \\/\\/ a history"
+        );
+        assert_eq!(escape_markup("Vol. 2 [reprint]"), "Vol. 2 \\[reprint\\]");
+        assert_eq!(escape_markup("half open ]"), "half open \\]");
+    }
+
+    /// Names are content like titles are, and pass through the same escape.
+    #[test]
+    fn test_author_names_are_escaped_as_content() {
+        let bib = "@article{k1, title = {T}, author = {Smith_Jones, Pat}, year = {2020} }";
+        let library = hayagriva::io::from_biblatex_str(bib).expect("parses");
+        let entry = library.get("k1").expect("entry");
+        let reference = full_reference(entry);
+        assert!(
+            reference.contains("Smith\\_Jones"),
+            "unescaped name in: {reference}"
+        );
     }
 }
