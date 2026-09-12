@@ -117,6 +117,19 @@ fn parse_typst_html(
         match span.kind {
             HTMLTagKind::Meta => {
                 let key = attr("key")?.as_ref();
+                // The parser seeded these before user metadata is read, and a
+                // user value must not displace them: overriding `slug` writes
+                // the page at the new address while every link, parent edge,
+                // and manifest entry still uses the real one. Warned and
+                // ignored, like other recoverable metadata mistakes.
+                if crate::entry::is_reserved_metadata(key) {
+                    color_print::ceprintln!(
+                        "<y>Warning: metadata key `{}` is reserved and was ignored in `{}`.</>",
+                        key,
+                        source_slug
+                    );
+                    continue;
+                }
                 // The taxon is stored exactly as authored. Capitalisation and the
                 // trailing ". " are display concerns and are applied when a taxon
                 // is rendered, not baked into the metadata — see `display_taxon`.
@@ -540,6 +553,39 @@ mod tests {
         assert_eq!(
             child.metadata.get_str(KEY_SOURCE_SLUG).map(String::as_str),
             Some("book/index")
+        );
+    }
+
+    // Regression test: user metadata was inserted over the seeded identity
+    // keys, so `#metadata((slug: "elsewhere"))` — a plausible attempt to
+    // rename a URL — silently forked the section: the page was written at the
+    // new slug while every link, parent edge, and manifest entry still used
+    // the real one.
+    #[test]
+    fn test_parse_typst_sections_ignores_reserved_metadata_keys() {
+        let html = r#"
+<wanshi-meta key="slug" value="elsewhere"></wanshi-meta>
+<wanshi-meta key="ext" value="md"></wanshi-meta>
+<wanshi-meta key="source-slug" value="elsewhere"></wanshi-meta>
+<wanshi-meta key="author" value="kept"></wanshi-meta>
+<p>body</p>
+"#;
+        let sections = parse_typst_sections_from_html(Slug::new("real"), Ext::Typst, html).unwrap();
+        let section = find_section(&sections, Slug::new("real"));
+
+        assert_eq!(section.metadata.slug(), Some(Slug::new("real")));
+        assert_eq!(section.metadata.ext().map(String::as_str), Some("typst"));
+        assert_eq!(
+            section
+                .metadata
+                .get_str(KEY_SOURCE_SLUG)
+                .map(String::as_str),
+            Some("real")
+        );
+        // Ordinary custom metadata is untouched by the guard.
+        assert_eq!(
+            section.metadata.get_str("author").map(String::as_str),
+            Some("kept")
         );
     }
 
