@@ -128,6 +128,16 @@ fn parse_typst_html(
                 metadata.insert(key.to_string(), val);
             }
             HTMLTagKind::Embed => {
+                // The same gate as subtree/query/outdent: `plain_html` relies
+                // on metadata values holding only plain chunks and links, and
+                // an ungated embed reached its `unreachable!()` as a panic.
+                if !allow_subtree {
+                    return Err(eyre!(
+                        "typst embed tag is not allowed in metadata value while parsing `{}`",
+                        source_slug
+                    ));
+                }
+
                 let def = SectionOption::default();
 
                 let url = attr("url")?.to_string();
@@ -531,6 +541,23 @@ mod tests {
             child.metadata.get_str(KEY_SOURCE_SLUG).map(String::as_str),
             Some("book/index")
         );
+    }
+
+    // Regression test: `Embed` was the one tag kind without the metadata-value
+    // gate, so `#embed` inside a metadata content block slipped past the
+    // parser and later hit `plain_html`'s `unreachable!()` as a panic —
+    // killing a serve session instead of reporting the input.
+    #[test]
+    fn test_parse_typst_sections_rejects_embed_in_metadata_value() {
+        let html = r#"
+<p>root</p>
+<wanshi-meta key="author"><wanshi-embed url="/other.typst"></wanshi-embed></wanshi-meta>
+"#;
+        let error = parse_typst_sections_from_html(Slug::new("a"), Ext::Typst, html)
+            .expect_err("embed in a metadata value must be rejected at parse time");
+        assert!(error
+            .to_string()
+            .contains("embed tag is not allowed in metadata value"));
     }
 
     #[test]
