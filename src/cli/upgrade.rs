@@ -78,8 +78,19 @@ fn run_upgrade_all(command: &UpgradeAllCommand) -> eyre::Result<()> {
         upgraded.source_path.as_path(),
         upgraded.output_path.as_path(),
     );
-    let typ_path = sync_wanshi_typ(upgraded.output_path.as_path(), &upgraded.config)?;
-    println!("Synced Typst library: {}", typ_path);
+    // `--output` is a preview: write the upgraded TOML where asked and touch
+    // nothing else. Anchoring the sync at the output path used to create
+    // `<output dir>/<trees>/_lib/` in a place the user never named, while the
+    // real site's library stayed stale.
+    if upgraded.output_path == upgraded.source_path {
+        let typ_path = sync_wanshi_typ(upgraded.output_path.as_path(), &upgraded.config)?;
+        println!("Synced Typst library: {}", typ_path);
+    } else {
+        println!(
+            "Typst library not synced (the config was written elsewhere); \
+             run `wanshi upgrade typst-lib` to sync the site's library."
+        );
+    }
     Ok(())
 }
 
@@ -291,6 +302,47 @@ trees = "content"
         let typ_path = root.join("content/_lib/wanshi.typ");
         let typ_content = std::fs::read_to_string(typ_path.as_std_path()).unwrap();
         assert_eq!(typ_content, include_str!("../include/wanshi.typ"));
+
+        let _ = std::fs::remove_dir_all(root.as_std_path());
+    }
+
+    // Regression test: `upgrade all --output <elsewhere>` used to anchor the
+    // library sync at the *output* path, creating `<elsewhere>/<trees>/_lib/`
+    // in a place the user never named while the real site's library stayed
+    // stale. `--output` is a preview: it writes the config and nothing else.
+    #[test]
+    fn test_upgrade_all_with_output_elsewhere_skips_the_library_sync() {
+        let root = crate::test_io::case_dir("upgrade-output-elsewhere");
+        std::fs::create_dir_all(root.join("preview").as_std_path()).unwrap();
+        let source_config = root.join("Wanshi.toml");
+        std::fs::write(
+            source_config.as_std_path(),
+            r#"
+[wanshi]
+trees = "content"
+"#,
+        )
+        .unwrap();
+        let output_config = root.join("preview/Wanshi.toml");
+
+        upgrade(&UpgradeCommand {
+            command: Some(UpgradeSubcommand::All(UpgradeAllCommand {
+                config: source_config.to_string(),
+                output: Some(output_config.to_string()),
+            })),
+        })
+        .unwrap();
+
+        assert!(output_config.exists(), "the preview config is written");
+        assert!(
+            !root.join("preview/content/_lib/wanshi.typ").exists(),
+            "no library appears under the output path"
+        );
+        assert!(
+            !root.join("content/_lib/wanshi.typ").exists(),
+            "the real site's library is not touched either — the preview \
+             changes nothing"
+        );
 
         let _ = std::fs::remove_dir_all(root.as_std_path());
     }
