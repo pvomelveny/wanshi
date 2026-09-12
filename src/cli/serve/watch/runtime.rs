@@ -2,13 +2,15 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic)
 
-use std::{io::Write, sync::mpsc::RecvTimeoutError, time::Instant};
+use std::{
+    collections::HashSet, ffi::OsString, io::Write, sync::mpsc::RecvTimeoutError, time::Instant,
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use notify::{Config, RecommendedWatcher, Watcher};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
 use super::strategy::{
-    default_watch_strategy, display_watch_path, watch_mode_for_path, MissingPathLevel,
+    default_watch_strategy, display_watch_path, partition_watch_targets, MissingPathLevel,
     WatchBatcher, WatchChangeFoldState, WatchStrategy,
 };
 
@@ -45,16 +47,10 @@ where
     let mut batcher = WatchBatcher::new(strategy.debounce);
     let mut fold_state = WatchChangeFoldState::default();
 
-    // Automatically select the best implementation for your platform.
-    // You can also access each implementation directly e.g. INotifyWatcher.
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
-
-    // All files and directories at that path and
-    // below will be monitored for changes.
-
     if !quiet {
         print!("[watch] ");
     }
+    let mut existing_paths: Vec<&Utf8Path> = Vec::new();
     for watched_path in watched_paths {
         let watched_path = watched_path.as_ref();
         if !watched_path.exists() {
@@ -76,14 +72,44 @@ where
             continue;
         }
 
-        let mode = watch_mode_for_path(watched_path);
-        watcher.watch(watched_path.as_std_path(), mode)?;
+        existing_paths.push(watched_path);
         if !quiet {
             print!("\"{}\"  ", display_watch_path(watched_path));
         }
     }
     if !quiet {
         println!("\n\nPress Ctrl+C to stop watching.\n");
+    }
+
+    let targets = partition_watch_targets(existing_paths);
+
+    // Single files are watched through their parent directory — see
+    // `WatchTargets` for why watching the file's own path goes dead on Linux —
+    // and the parent watcher filters to the registered names so an unrelated
+    // sibling edit does not trigger a rebuild.
+    let file_names = targets.file_names.clone();
+    let file_tx = tx.clone();
+    let mut file_watcher = RecommendedWatcher::new(
+        move |message: notify::Result<notify::Event>| {
+            let keep = match &message {
+                Ok(event) => event_names_a_registered_file(event, &file_names),
+                Err(_) => true,
+            };
+            if keep {
+                let _ = file_tx.send(message);
+            }
+        },
+        Config::default(),
+    )?;
+    for parent in &targets.file_parents {
+        file_watcher.watch(parent.as_std_path(), RecursiveMode::NonRecursive)?;
+    }
+
+    // Automatically select the best implementation for your platform.
+    // You can also access each implementation directly e.g. INotifyWatcher.
+    let mut dir_watcher = RecommendedWatcher::new(tx, Config::default())?;
+    for dir in &targets.directories {
+        dir_watcher.watch(dir.as_std_path(), RecursiveMode::Recursive)?;
     }
 
     loop {
@@ -163,6 +189,15 @@ fn absorb_watch_message(
     }
 }
 
+/// Whether the event touches one of the single files registered with the
+/// parent-directory watcher.
+fn event_names_a_registered_file(event: &notify::Event, file_names: &HashSet<OsString>) -> bool {
+    event.paths.iter().any(|path| {
+        path.file_name()
+            .is_some_and(|name| file_names.contains(name))
+    })
+}
+
 fn collect_event_paths(event: notify::Event, strategy: WatchStrategy) -> Option<Vec<Utf8PathBuf>> {
     if !(strategy.should_handle_event)(&event.kind) {
         return None;
@@ -214,5 +249,25 @@ mod tests {
                 Utf8PathBuf::from("trees/b.typ")
             ]
         );
+    }
+
+    /// The parent-directory watcher stands in for the single files, so its
+    /// filter must pass exactly the registered names: the config saved by
+    /// rename must still arrive, an unrelated sibling file must not.
+    #[test]
+    fn test_parent_watch_filter_passes_only_registered_file_names() {
+        let file_names: HashSet<OsString> = [OsString::from("Wanshi.toml")].into();
+        let event = |path: &str| {
+            notify::Event::new(EventKind::Modify(ModifyKind::Any)).add_path(PathBuf::from(path))
+        };
+
+        assert!(event_names_a_registered_file(
+            &event("site/Wanshi.toml"),
+            &file_names
+        ));
+        assert!(!event_names_a_registered_file(
+            &event("site/README.md"),
+            &file_names
+        ));
     }
 }

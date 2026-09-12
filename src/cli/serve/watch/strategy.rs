@@ -2,10 +2,12 @@
 // Released under the GPL-3.0 license as described in the file LICENSE.
 // Authors: Kokic (@kokic)
 
+use std::collections::HashSet;
+use std::ffi::OsString;
 use std::time::{Duration, Instant};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use notify::{EventKind, RecursiveMode};
+use notify::EventKind;
 
 use crate::environment;
 
@@ -125,12 +127,49 @@ pub(super) fn should_handle_watch_event(kind: &EventKind) -> bool {
     )
 }
 
-pub(super) fn watch_mode_for_path(path: &Utf8Path) -> RecursiveMode {
-    if path.is_file() {
-        RecursiveMode::NonRecursive
-    } else {
-        RecursiveMode::Recursive
+/// How the watcher attaches to the configured paths.
+///
+/// Directories are watched recursively. A single file — the config, an
+/// `import-*.html`, a theme file — is *not* watched by its own path: inotify
+/// pins such a watch to the file's inode, and editors that save by
+/// write-new-then-rename (vim, emacs) replace the inode, so on Linux the first
+/// save of `Wanshi.toml` restarted the server and every later one was
+/// invisible. Each file's parent directory is watched non-recursively instead,
+/// and the parent watcher's events are filtered to the registered file names
+/// so an unrelated root-level edit does not trigger a rebuild.
+pub(super) struct WatchTargets {
+    pub(super) directories: Vec<Utf8PathBuf>,
+    /// Deduplicated: the config and the import snippets all live at the root.
+    pub(super) file_parents: Vec<Utf8PathBuf>,
+    pub(super) file_names: HashSet<OsString>,
+}
+
+pub(super) fn partition_watch_targets<'a, I>(existing_paths: I) -> WatchTargets
+where
+    I: IntoIterator<Item = &'a Utf8Path>,
+{
+    let mut targets = WatchTargets {
+        directories: Vec::new(),
+        file_parents: Vec::new(),
+        file_names: HashSet::new(),
+    };
+    for path in existing_paths {
+        if path.is_file() {
+            let parent = match path.parent() {
+                Some(parent) if !parent.as_str().is_empty() => parent.to_owned(),
+                _ => Utf8PathBuf::from("."),
+            };
+            if !targets.file_parents.contains(&parent) {
+                targets.file_parents.push(parent);
+            }
+            if let Some(name) = path.file_name() {
+                targets.file_names.insert(OsString::from(name));
+            }
+        } else {
+            targets.directories.push(path.to_owned());
+        }
     }
+    targets
 }
 
 pub(super) fn display_watch_path(path: &Utf8Path) -> String {
@@ -200,10 +239,7 @@ pub(super) fn default_missing_path_level(
 
 #[cfg(test)]
 mod tests {
-    use notify::{
-        event::{AccessKind, CreateKind, ModifyKind, RemoveKind},
-        RecursiveMode,
-    };
+    use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind};
     use std::{
         fs,
         time::{Duration, Instant},
@@ -260,21 +296,37 @@ mod tests {
         )));
     }
 
+    // Regression test: single files used to be watched by their own path,
+    // which inotify pins to the inode — a rename-style save (vim, emacs)
+    // replaced the inode and the watch silently went dead. Files are watched
+    // through their parent directory instead, deduplicated, with their names
+    // registered for the event filter.
     #[test]
-    fn test_watch_mode_for_path_file_and_dir() {
-        let root = case_dir("watch-mode");
-        let file = root.join("a.txt");
-        fs::create_dir_all(&root).unwrap();
-        fs::write(&file, "x").unwrap();
+    fn test_partition_watch_targets_moves_files_to_their_parents() {
+        let root = case_dir("partition-targets");
+        fs::create_dir_all(root.join("trees")).unwrap();
+        fs::write(root.join("Wanshi.toml"), "x").unwrap();
+        fs::write(root.join("import-font.html"), "x").unwrap();
 
+        let paths = [
+            root.join("trees"),
+            root.join("Wanshi.toml"),
+            root.join("import-font.html"),
+        ];
+        let targets = partition_watch_targets(paths.iter().map(Utf8PathBuf::as_path));
+
+        assert_eq!(targets.directories, vec![root.join("trees")]);
         assert_eq!(
-            watch_mode_for_path(root.as_path()),
-            RecursiveMode::Recursive
+            targets.file_parents,
+            vec![root.clone()],
+            "the two files share one parent watch"
         );
-        assert_eq!(
-            watch_mode_for_path(file.as_path()),
-            RecursiveMode::NonRecursive
-        );
+        assert!(targets
+            .file_names
+            .contains(std::ffi::OsStr::new("Wanshi.toml")));
+        assert!(targets
+            .file_names
+            .contains(std::ffi::OsStr::new("import-font.html")));
 
         let _ = fs::remove_dir_all(root);
     }
