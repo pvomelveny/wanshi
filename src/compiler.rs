@@ -114,6 +114,19 @@ pub(super) fn compile_from_shallows(
 
     let indexes = outputs.indexes.then(|| indexes_from_shallows(shallows));
 
+    // A dangling local link renders as a real link to a 404 on the published
+    // page, so the build says so — `wanshi check` reports the same set as
+    // diagnostics, but a page can be published without a check ever running.
+    // A warning, never an error: drafting a link before its target exists is
+    // a legitimate way to work.
+    for dangling in links::dangling_local_links(shallows) {
+        color_print::ceprintln!(
+            "<y>Warning: `{}` links to `{}`, which does not exist.</>",
+            dangling.from,
+            dangling.target
+        );
+    }
+
     let state = state::compile_all(shallows)?;
     let slugs_to_write: Vec<Slug> = match dirty_paths {
         Some(dirty_paths) => {
