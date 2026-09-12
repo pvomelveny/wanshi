@@ -1,9 +1,16 @@
 // Mobile TOC: responsive open / close behavior for the table of contents.
+//
+// Listen for the breakpoint actually flipping, not for every resize: on
+// mobile, collapsing the URL bar and opening the keyboard both fire `resize`,
+// and forcing the state each time snapped shut a TOC the reader had just
+// opened.
+const tocBreakpoint = window.matchMedia("(max-width: 1000px)");
+
 function toggleDetailsOpen() {
   const details = document.querySelector("#toc>div>details");
   if (!details) return;
 
-  if (window.matchMedia("(max-width: 1000px)").matches) {
+  if (tocBreakpoint.matches) {
     details.removeAttribute("open");
   } else {
     details.setAttribute("open", "");
@@ -11,7 +18,7 @@ function toggleDetailsOpen() {
 }
 
 document.addEventListener("DOMContentLoaded", toggleDetailsOpen);
-window.addEventListener("resize", toggleDetailsOpen);
+tocBreakpoint.addEventListener("change", toggleDetailsOpen);
 
 // Theme: option selection, persistence, and dynamic color invert logic.
 const WANSHI_THEME_KEY = `wanshi-theme`;
