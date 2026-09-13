@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_header_metadata_prints_only_the_configured_keys() {
-        crate::environment::mock_environment().unwrap();
+        let _guard = crate::environment::mock_environment();
 
         let etc = vec![
             ("date".to_string(), "2026-08-17".to_string()),

@@ -117,6 +117,19 @@ fn parse_typst_html(
         match span.kind {
             HTMLTagKind::Meta => {
                 let key = attr("key")?.as_ref();
+                // The parser seeded these before user metadata is read, and a
+                // user value must not displace them: overriding `slug` writes
+                // the page at the new address while every link, parent edge,
+                // and manifest entry still uses the real one. Warned and
+                // ignored, like other recoverable metadata mistakes.
+                if crate::entry::is_reserved_metadata(key) {
+                    color_print::ceprintln!(
+                        "<y>Warning: metadata key `{}` is reserved and was ignored in `{}`.</>",
+                        key,
+                        source_slug
+                    );
+                    continue;
+                }
                 // The taxon is stored exactly as authored. Capitalisation and the
                 // trailing ". " are display concerns and are applied when a taxon
                 // is rendered, not baked into the metadata — see `display_taxon`.
@@ -128,6 +141,16 @@ fn parse_typst_html(
                 metadata.insert(key.to_string(), val);
             }
             HTMLTagKind::Embed => {
+                // The same gate as subtree/query/outdent: `plain_html` relies
+                // on metadata values holding only plain chunks and links, and
+                // an ungated embed reached its `unreachable!()` as a panic.
+                if !allow_subtree {
+                    return Err(eyre!(
+                        "typst embed tag is not allowed in metadata value while parsing `{}`",
+                        source_slug
+                    ));
+                }
+
                 let def = SectionOption::default();
 
                 let url = attr("url")?.to_string();
@@ -531,6 +554,56 @@ mod tests {
             child.metadata.get_str(KEY_SOURCE_SLUG).map(String::as_str),
             Some("book/index")
         );
+    }
+
+    // Regression test: user metadata was inserted over the seeded identity
+    // keys, so `#metadata((slug: "elsewhere"))` — a plausible attempt to
+    // rename a URL — silently forked the section: the page was written at the
+    // new slug while every link, parent edge, and manifest entry still used
+    // the real one.
+    #[test]
+    fn test_parse_typst_sections_ignores_reserved_metadata_keys() {
+        let html = r#"
+<wanshi-meta key="slug" value="elsewhere"></wanshi-meta>
+<wanshi-meta key="ext" value="md"></wanshi-meta>
+<wanshi-meta key="source-slug" value="elsewhere"></wanshi-meta>
+<wanshi-meta key="author" value="kept"></wanshi-meta>
+<p>body</p>
+"#;
+        let sections = parse_typst_sections_from_html(Slug::new("real"), Ext::Typst, html).unwrap();
+        let section = find_section(&sections, Slug::new("real"));
+
+        assert_eq!(section.metadata.slug(), Some(Slug::new("real")));
+        assert_eq!(section.metadata.ext().map(String::as_str), Some("typst"));
+        assert_eq!(
+            section
+                .metadata
+                .get_str(KEY_SOURCE_SLUG)
+                .map(String::as_str),
+            Some("real")
+        );
+        // Ordinary custom metadata is untouched by the guard.
+        assert_eq!(
+            section.metadata.get_str("author").map(String::as_str),
+            Some("kept")
+        );
+    }
+
+    // Regression test: `Embed` was the one tag kind without the metadata-value
+    // gate, so `#embed` inside a metadata content block slipped past the
+    // parser and later hit `plain_html`'s `unreachable!()` as a panic —
+    // killing a serve session instead of reporting the input.
+    #[test]
+    fn test_parse_typst_sections_rejects_embed_in_metadata_value() {
+        let html = r#"
+<p>root</p>
+<wanshi-meta key="author"><wanshi-embed url="/other.typst"></wanshi-embed></wanshi-meta>
+"#;
+        let error = parse_typst_sections_from_html(Slug::new("a"), Ext::Typst, html)
+            .expect_err("embed in a metadata value must be rejected at parse time");
+        assert!(error
+            .to_string()
+            .contains("embed tag is not allowed in metadata value"));
     }
 
     #[test]

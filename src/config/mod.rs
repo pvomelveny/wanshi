@@ -69,8 +69,15 @@ pub fn find_config(mut toml_file: Utf8PathBuf) -> eyre::Result<Utf8PathBuf> {
 }
 
 pub fn parse_config(config: &str) -> eyre::Result<Config> {
-    let config: Config =
+    let mut config: Config =
         toml::from_str(config).map_err(|e| eyre::eyre!("failed to parse config file: {}", e))?;
+    // Every URL builder concatenates a page path directly onto `base-url`, so
+    // without the trailing slash every link, feed item, and search index URL
+    // came out as `https://example.comnotes/a.html`. Normalised rather than
+    // warned about: the slash-less spelling has exactly one plausible meaning.
+    if !config.wanshi.base_url.ends_with('/') {
+        config.wanshi.base_url.push('/');
+    }
     Ok(config)
 }
 
@@ -130,5 +137,42 @@ mod test {
         assert_eq!(config.serve.edit, serve.edit);
         assert_eq!(config.serve.output, serve.output);
         assert!(config.publish.rss);
+    }
+
+    // Regression test: URL builders concatenate paths directly onto
+    // `base-url`, so a slash-less value corrupted every generated URL.
+    #[test]
+    fn test_base_url_gains_a_trailing_slash() {
+        let config = crate::config::parse_config(
+            r#"
+            [wanshi]
+            base-url = "https://example.com"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(config.wanshi.base_url, "https://example.com/");
+
+        // An already-correct value is left alone.
+        let config = crate::config::parse_config("").unwrap();
+        assert_eq!(config.wanshi.base_url, "/");
+    }
+
+    // Regression test: `Serve` was the one config struct without
+    // `#[serde(default)]` on the container, so a `[serve]` table overriding a
+    // single key failed every command with `missing field`.
+    #[test]
+    fn test_partial_serve_table_fills_in_defaults() {
+        let serve = crate::config::Serve::default();
+        let config = crate::config::parse_config(
+            r#"
+            [serve]
+            edit = "zed://file/"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.serve.edit.as_deref(), Some("zed://file/"));
+        assert_eq!(config.serve.output, serve.output);
+        assert_eq!(config.serve.command, serve.command);
     }
 }

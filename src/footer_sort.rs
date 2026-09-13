@@ -6,9 +6,20 @@ use std::cmp::Ordering;
 
 pub fn compare_values(sort_key: &str, left: &str, right: &str) -> Ordering {
     if sort_key == "date" {
-        if let (Some(left_date), Some(right_date)) = (parse_date(left), parse_date(right)) {
-            return left_date.cmp(&right_date);
-        }
+        // The classes are ordered first — every unparseable value before every
+        // date — and the string fallback only ever compares within the
+        // unparseable class, so the order stays a strict weak ordering when
+        // the two mix. Deciding per-pair — dates when both parse, strings
+        // otherwise — produced cycles ("9 May 2020" < "10 May 2021" as dates,
+        // "10 May 2021" < "5 drafts" < "9 May 2020" as strings), and a
+        // comparator with a cycle makes `sort_by` panic. Two spellings of the
+        // same date stay `Equal`, as pinned below.
+        return match (parse_date(left), parse_date(right)) {
+            (Some(left_date), Some(right_date)) => left_date.cmp(&right_date),
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => left.cmp(right),
+        };
     }
 
     left.cmp(right)
@@ -135,6 +146,32 @@ fn validate_ymd(year: u32, month: u8, day: u8) -> Option<(u32, u8, u8)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Regression test: choosing date-order or string-order per pair produced a
+    // cycle across these three values, and std's `sort_by` may panic outright
+    // on a comparator that is not a total order.
+    #[test]
+    fn test_compare_values_stays_total_when_dates_and_non_dates_mix() {
+        let mut values = ["10 May 2021", "5 drafts", "9 May 2020"];
+        values.sort_by(|left, right| compare_values("date", left, right));
+        // Unparseable values group first, real dates follow in date order.
+        assert_eq!(values, ["5 drafts", "9 May 2020", "10 May 2021"]);
+
+        // The old comparator's cycle, spelled out: each pair must now agree
+        // with the sorted order above.
+        assert_eq!(
+            compare_values("date", "9 May 2020", "10 May 2021"),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_values("date", "10 May 2021", "5 drafts"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_values("date", "5 drafts", "9 May 2020"),
+            Ordering::Less
+        );
+    }
 
     #[test]
     fn test_compare_values_parses_textual_month_dates() {

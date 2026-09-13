@@ -44,23 +44,35 @@ pub fn dangling_local_links(shallows: &HashMap<Slug, UnresolvedSection>) -> Vec<
     let mut dangling = Vec::new();
 
     for (&from, section) in shallows {
-        let HTMLContent::Lazy(contents) = &section.content else {
-            continue;
-        };
-        for content in contents {
-            let LazyContent::Local(local) = content else {
-                continue;
-            };
-            let target = resolve_local_target(from, &local.url);
-            if shallows.contains_key(&target) {
-                continue;
+        let mut check_contents = |contents: &[LazyContent]| {
+            for content in contents {
+                let LazyContent::Local(local) = content else {
+                    continue;
+                };
+                let target = resolve_local_target(from, &local.url);
+                if shallows.contains_key(&target) {
+                    continue;
+                }
+                if seen.insert((from, target, local.url.clone())) {
+                    dangling.push(DanglingLink {
+                        from,
+                        url: local.url.clone(),
+                        target,
+                    });
+                }
             }
-            if seen.insert((from, target, local.url.clone())) {
-                dangling.push(DanglingLink {
-                    from,
-                    url: local.url.clone(),
-                    target,
-                });
+        };
+
+        if let HTMLContent::Lazy(contents) = &section.content {
+            check_contents(contents);
+        }
+        // Metadata values are compiled like bodies — a link written in a title
+        // still renders as a link and records a backlink — so a dangling one
+        // there is just as published as one in the body. Scanning only the
+        // content let it slip past `check --strict` and `refs sync` alike.
+        for value in section.metadata.0.values() {
+            if let HTMLContent::Lazy(contents) = value {
+                check_contents(contents);
             }
         }
     }
@@ -173,6 +185,35 @@ mod tests {
         let dangling = dangling_local_links(&shallows);
         assert_eq!(dangling.len(), 1, "only the missing one: {dangling:?}");
         assert_eq!(dangling[0].target, Slug::new("refs/kkl1988"));
+        assert_eq!(dangling[0].from, Slug::new("notes/a"));
+    }
+
+    // Regression test: metadata values compile like bodies — a link in a title
+    // renders as a link and records a backlink — but only the body was
+    // scanned, so a dangling link written in metadata was published silently:
+    // `check --strict` reported zero problems and `refs sync` never stubbed it.
+    #[test]
+    fn test_dangling_links_include_links_written_in_metadata_values() {
+        let mut builder = HTMLContentBuilder::new();
+        builder.push(LazyContent::Local(LocalLink {
+            url: "/refs/missing".to_string(),
+            text: None,
+        }));
+        let mut metadata = crate::ordered_map::OrderedMap::new();
+        metadata.insert("title".to_string(), builder.build());
+
+        let mut shallows = HashMap::new();
+        shallows.insert(
+            Slug::new("notes/a"),
+            UnresolvedSection {
+                metadata: crate::entry::HTMLMetaData(metadata),
+                content: HTMLContent::Plain("<p>body</p>".to_string()),
+            },
+        );
+
+        let dangling = dangling_local_links(&shallows);
+        assert_eq!(dangling.len(), 1, "the metadata link must be seen");
+        assert_eq!(dangling[0].target, Slug::new("refs/missing"));
         assert_eq!(dangling[0].from, Slug::new("notes/a"));
     }
 

@@ -86,6 +86,9 @@ pub enum ExportFormat {
 /// Every section in the forest, with the links that resolve to nothing.
 struct Forest {
     shallows: std::collections::HashMap<Slug, compiler::section::UnresolvedSection>,
+    /// Source slug → the extension its file actually has on disk. Sections
+    /// defined inside another file (named subtrees) have no entry.
+    source_exts: std::collections::HashMap<Slug, Ext>,
 }
 
 impl Forest {
@@ -109,7 +112,10 @@ impl Forest {
                 failures.len()
             );
         }
-        Ok(Self { shallows })
+        Ok(Self {
+            shallows,
+            source_exts: workspace.slug_exts,
+        })
     }
 }
 
@@ -191,7 +197,17 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
             continue;
         }
 
-        let path = stub_path(*target);
+        let ext = forest.source_exts.get(target).copied();
+
+        // A note defined inside another file — a named subtree — has no file
+        // of its own, so there is nothing a stub could safely stand in for;
+        // writing one would collide with the existing section.
+        if *origin == Origin::Existing && ext.is_none() {
+            hand_written += 1;
+            continue;
+        }
+
+        let path = stub_path(*target, ext);
         let existing = if path.exists() {
             Some(
                 std::fs::read_to_string(&path)
@@ -382,6 +398,35 @@ pub fn export(command: &RefsExportCommand) -> eyre::Result<()> {
 }
 
 /// Where a stub for `slug` would be written.
-fn stub_path(slug: Slug) -> Utf8PathBuf {
-    environment::trees_dir().join(format!("{slug}.{}", Ext::Typ))
+///
+/// An existing note keeps the extension its file already has — `.typst` is
+/// still a supported spelling — because probing the `.typ` path for it finds
+/// nothing, which bypasses the hand-written check and writes a colliding twin
+/// beside the real note. Only a note that does not exist yet gets the default.
+fn stub_path(slug: Slug, existing_ext: Option<Ext>) -> Utf8PathBuf {
+    let ext = existing_ext.unwrap_or(Ext::Typ);
+    environment::trees_dir().join(format!("{slug}.{ext}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression test: `stub_path` hardcoded `.typ`, so a hand-written
+    // `refs/key.typst` was probed at the wrong path, judged absent, and a
+    // generated stub was written beside it — which the next scan rejects as a
+    // slug collision.
+    #[test]
+    fn test_stub_path_keeps_the_extension_an_existing_note_already_has() {
+        let root = crate::test_io::case_dir("refs-stub-path-ext");
+        environment::with_test_environment(root, environment::BuildMode::Check, || {
+            let slug = Slug::new("refs/smith2020");
+            assert!(stub_path(slug, Some(Ext::Typst))
+                .as_str()
+                .ends_with("refs/smith2020.typst"));
+            assert!(stub_path(slug, None)
+                .as_str()
+                .ends_with("refs/smith2020.typ"));
+        });
+    }
 }

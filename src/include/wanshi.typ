@@ -67,7 +67,15 @@
 
 #let span-slug(slug) = underline(stroke: dotted-stroke, text(size: 1.083em, fill: slug-color, raw("[" + slug + "]")))
 
-#let taxon-upper(taxon) = upper(taxon.at(0)) + taxon.slice(1) + "."
+// Clusters, not byte indices: `taxon.at(0)` panics on a multibyte first
+// character ("string index 1 is not a character boundary"), which failed the
+// whole paged compile for a taxon like "übung" or "定理". Mirrors the
+// display-side `capitalize` in compiler/taxon.rs — keep the two agreeing.
+#let taxon-upper(taxon) = {
+  let clusters = taxon.clusters()
+  if clusters.len() == 0 { return "" }
+  upper(clusters.at(0)) + clusters.slice(1).join("") + "."
+}
 
 #let metadata(table) = {
   let title = table.at("title", default: "")

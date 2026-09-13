@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct Serve {
     pub edit: Option<String>,
     pub output: String,

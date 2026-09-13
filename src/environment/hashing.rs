@@ -23,25 +23,28 @@ pub fn is_hash_updated<P: AsRef<Utf8Path>>(content: &str, hash_path: P) -> (bool
     (current_hash != history_hash, current_hash)
 }
 
-/// Checks whether the file has been modified by comparing its current hash with the stored hash.
-/// If the file is modified, updates the stored hash to reflect the latest state.
-pub fn verify_and_file_hash<P: AsRef<Utf8Path>>(relative_path: P) -> eyre::Result<bool> {
+/// Whether the source file at `relative_path` (under the trees directory)
+/// differs from its last recorded state, along with its hash for
+/// [`record_hash`].
+///
+/// Split from recording for the same reason as [`verify_hash`]: the check runs
+/// before the source is parsed, the record only once the parse has landed in
+/// the entry cache. One function that did both persisted the new hash *first*,
+/// so a parse that then failed looked current to the next build — the stale
+/// entry cache was served, and a source that does not compile built
+/// "successfully" with its pre-edit content until it was edited again.
+pub fn verify_source_hash<P: AsRef<Utf8Path>>(relative_path: P) -> eyre::Result<(bool, u64)> {
     if *crate::cli::build::no_cache_enabled() {
-        return Ok(true);
+        // The hash is never recorded in this mode, so its value is unused.
+        return Ok((true, 0));
     }
 
-    let root_dir = super::trees_dir();
-    let full_path = root_dir.join(&relative_path);
+    let full_path = super::trees_dir().join(&relative_path);
     let hash_path = super::hash_file_path(&relative_path);
 
     let content = std::fs::read_to_string(&full_path)
         .wrap_err_with(|| eyre!("failed to read file `{}`", full_path))?;
-    let (is_modified, current_hash) = is_hash_updated(&content, &hash_path);
-    if is_modified {
-        std::fs::write(&hash_path, current_hash.to_string())
-            .wrap_err_with(|| eyre!("failed to write file `{}`", hash_path))?;
-    }
-    Ok(is_modified)
+    Ok(is_hash_updated(&content, &hash_path))
 }
 
 /// Whether `content` differs from the last recorded state of `path`'s output,
@@ -61,9 +64,11 @@ pub fn verify_hash<P: AsRef<Utf8Path>>(path: P, content: &str) -> (bool, u64) {
     is_hash_updated(content, &hash_path)
 }
 
-/// Record `hash` as the last successfully written state of `path`'s output.
+/// Record `hash` as the last known-good state of `path` — for an output, once
+/// the page is on disk; for a source, once its parse is in the entry cache.
 ///
-/// Call this only once the output itself is on disk — see [`verify_hash`].
+/// Call this only once that has actually happened — see [`verify_hash`] and
+/// [`verify_source_hash`].
 pub fn record_hash<P: AsRef<Utf8Path>>(path: P, hash: u64) -> eyre::Result<()> {
     if *crate::cli::build::no_cache_enabled() {
         return Ok(());
@@ -131,6 +136,34 @@ mod tests {
 
             let hash_path = super::super::hash_file_path(relative);
             assert!(hash_path.exists());
+        });
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// The source-side check must not record anything either: recording is the
+    /// parser's reward for a successful parse, not a side effect of asking. A
+    /// hash persisted before the parse made a failing source look unmodified
+    /// on the next build, which then served the stale entry cache and exited 0.
+    #[test]
+    fn test_verify_source_hash_alone_records_nothing() {
+        let root = crate::test_io::case_dir("env-hash-source-verify-only");
+
+        super::super::with_test_environment(root.clone(), super::super::BuildMode::Publish, || {
+            let trees = super::super::trees_dir();
+            fs::create_dir_all(trees.as_std_path()).unwrap();
+            let relative = "c.typst";
+            fs::write(trees.join(relative).as_std_path(), "#lorem(1)").unwrap();
+
+            let (changed, hash) = verify_source_hash(relative).unwrap();
+            assert!(changed);
+            // Asked twice without recording, it must answer "changed" twice.
+            assert!(verify_source_hash(relative).unwrap().0);
+            assert!(!super::super::hash_file_path(relative).exists());
+
+            // Recording is what settles it.
+            record_hash(relative, hash).unwrap();
+            assert!(!verify_source_hash(relative).unwrap().0);
         });
 
         let _ = fs::remove_dir_all(root);

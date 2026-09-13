@@ -82,6 +82,22 @@ pub const KEY_FOOTER_MODE: &str = "footer-mode";
 /// `footer-sort-by: <metadata-key>`
 pub const KEY_FOOTER_SORT_BY: &str = "footer-sort-by";
 
+/// Keys the parser seeds itself and user metadata may not override. The first
+/// three are the section's identity — a user value forks it, writing the page
+/// at the new slug while every link, parent edge, and manifest entry still
+/// uses the real one — and the last is the parser's own marker for anonymous
+/// subtrees.
+const RESERVED_METADATA: [&str; 4] = [
+    KEY_SLUG,
+    KEY_EXT,
+    KEY_SOURCE_SLUG,
+    KEY_INTERNAL_ANON_SUBTREE,
+];
+
+pub fn is_reserved_metadata(s: &str) -> bool {
+    RESERVED_METADATA.contains(&s)
+}
+
 const FANCY_METADATA: [&str; 2] = [KEY_TITLE, KEY_TAXON];
 
 const PLAIN_METADATA: [&str; 17] = [

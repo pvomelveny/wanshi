@@ -548,7 +548,7 @@ base-url = "/notes/"
 
     #[test]
     fn test_html_live_reload_disabled_outside_serve_mode() {
-        environment::mock_environment().unwrap();
+        let _guard = environment::mock_environment();
         assert!(html_live_reload().is_empty());
     }
 
@@ -556,7 +556,7 @@ base-url = "/notes/"
     /// character data, not markup.
     #[test]
     fn test_html_doc_escapes_the_title_element() {
-        environment::mock_environment().unwrap();
+        let _guard = environment::mock_environment();
 
         let html = html_doc("A < B & C", "", "body", "", "");
         assert!(
@@ -594,7 +594,7 @@ theme-lock = true
 
     #[test]
     fn test_html_dynamic_css_hides_theme_options_by_default() {
-        environment::mock_environment().unwrap();
+        let _guard = environment::mock_environment();
 
         let css = html_dynamic_css();
         assert!(css.contains("#theme-options { display: none; }"));
