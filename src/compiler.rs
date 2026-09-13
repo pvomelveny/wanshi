@@ -120,11 +120,7 @@ pub(super) fn compile_from_shallows(
     // A warning, never an error: drafting a link before its target exists is
     // a legitimate way to work.
     for dangling in links::dangling_local_links(shallows) {
-        color_print::ceprintln!(
-            "<y>Warning: `{}` links to `{}`, which does not exist.</>",
-            dangling.from,
-            dangling.target
-        );
+        color_print::ceprintln!("<y>Warning: {}</>", dangling.message());
     }
 
     let state = state::compile_all(shallows)?;
