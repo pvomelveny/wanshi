@@ -82,7 +82,7 @@ fn run_upgrade_all(command: &UpgradeAllCommand) -> eyre::Result<()> {
     // nothing else. Anchoring the sync at the output path used to create
     // `<output dir>/<trees>/_lib/` in a place the user never named, while the
     // real site's library stayed stale.
-    if upgraded.output_path == upgraded.source_path {
+    if names_the_same_file(&upgraded.output_path, &upgraded.source_path) {
         let typ_path = sync_wanshi_typ(upgraded.output_path.as_path(), &upgraded.config)?;
         println!("Synced Typst library: {}", typ_path);
     } else {
@@ -119,13 +119,27 @@ fn run_upgrade_typst_lib(command: &UpgradeTypstLibCommand) -> eyre::Result<()> {
 }
 
 fn print_config_upgrade_message(source_path: &camino::Utf8Path, output_path: &camino::Utf8Path) {
-    if output_path == source_path {
+    if names_the_same_file(output_path, source_path) {
         println!("Upgraded config at: {}", output_path);
     } else {
         println!(
             "Upgraded config from \"{}\" to \"{}\"",
             source_path, output_path
         );
+    }
+}
+
+/// Whether two paths name one file on disk.
+///
+/// Textual comparison is not enough: `Utf8Path` compares by component, so the
+/// default `./Wanshi.toml` and an `--output Wanshi.toml` that overwrites it
+/// look different — and the difference decides whether the Typst library is
+/// synced. Both files exist by the time this is asked, so canonicalisation
+/// answers it; the textual test remains the fallback.
+fn names_the_same_file(left: &camino::Utf8Path, right: &camino::Utf8Path) -> bool {
+    match (left.canonicalize_utf8(), right.canonicalize_utf8()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
     }
 }
 
@@ -343,6 +357,27 @@ trees = "content"
             "the real site's library is not touched either — the preview \
              changes nothing"
         );
+
+        let _ = std::fs::remove_dir_all(root.as_std_path());
+    }
+
+    // Regression test: the source and output paths were compared by
+    // component, so two spellings of one file — the default config path
+    // carries a leading `./`, a typed `--output` usually does not — read as
+    // different. That comparison decides whether the Typst library is synced,
+    // so `--output` naming the very file being upgraded skipped the sync and
+    // announced that the config had been written elsewhere. It had not.
+    #[test]
+    fn test_two_spellings_of_one_config_file_are_not_elsewhere() {
+        let root = crate::test_io::case_dir("upgrade-same-file-spelling");
+        std::fs::create_dir_all(root.join("sub").as_std_path()).unwrap();
+        let direct = root.join("Wanshi.toml");
+        std::fs::write(direct.as_std_path(), "").unwrap();
+        let roundabout = root.join("sub/../Wanshi.toml");
+
+        assert_ne!(direct, roundabout, "the two spellings differ textually");
+        assert!(names_the_same_file(&direct, &roundabout));
+        assert!(!names_the_same_file(&direct, &root.join("Other.toml")));
 
         let _ = std::fs::remove_dir_all(root.as_std_path());
     }
