@@ -74,7 +74,10 @@ Alias: `wanshi i`.
 wanshi build
 ```
 
-Compiles the current site into the publish output directory.
+Compiles the current site into the publish output directory. Local links that
+resolve to nothing are reported as warnings while it runs — the same links
+[`wanshi check`](#wanshi-check) reports, in the same words — because a page can
+be published without a check ever running. They never fail the build.
 
 Options:
 
@@ -165,6 +168,10 @@ upstream correction reaches the forest; a generated note carries a marker
 comment, and deleting that marker takes the file over by hand. Content that has
 not changed is not rewritten.
 
+A generated note whose entry has since left the bibliography is reported as
+orphaned and kept: it can never refresh again, but whether it should outlive
+its entry is your call — delete it, or take it over by removing its marker.
+
 Options:
 
 - `--config <path>`, short `-c`: configuration file.
@@ -225,6 +232,10 @@ Subcommands:
 Options for config upgrades:
 
 - `--config <path>`, short `-c`: source configuration file.
-- `--output <path>`, short `-o`: write upgraded config to another path instead of overwriting.
+- `--output <path>`, short `-o`: write upgraded config to another path instead of
+  overwriting. With `all`, this makes the run a preview: the config is written
+  where you asked and nothing else is touched, so the site's Typst library is
+  left alone. Sync it with `wanshi upgrade typst-lib` when you adopt the
+  upgraded config.
 
 Alias: `wanshi u`.

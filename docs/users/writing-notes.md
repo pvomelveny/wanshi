@@ -392,8 +392,10 @@ section `notes/nowhere`.
 ```
 
 Dangling links are warnings by design — drafting a link before its target exists
-is a legitimate way to work. Use `wanshi check --strict` in CI or before a
-release to turn every warning into a failure.
+is a legitimate way to work. A build prints the same warnings, in the same
+words, so one never reaches a published page unannounced; only `wanshi check
+--strict` turns them into a failure, which is what to run in CI or before a
+release.
 
 ## 8. Build
 
