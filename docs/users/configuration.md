@@ -1,6 +1,6 @@
 # Configuration Reference
 
-wanshi reads `Wanshi.toml` by default. Commands that accept `--config` can point at another file. If the specified config path is not found, wanshi searches from the parent directory in the way used by project commands, so commands can often be run from inside a site.
+wanshi reads `Wanshi.toml` by default. When that default file is not in the current directory, wanshi looks one directory up, so commands can often be run from inside a site. Commands that accept `--config` can point at another file; a `--config` path that does not exist is an error rather than a search request, because the file that would be found instead is not the one you named.
 
 An empty configuration is valid because every section has defaults.
 

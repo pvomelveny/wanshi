@@ -35,6 +35,32 @@ pub struct DanglingLink {
     pub target: Slug,
 }
 
+impl DanglingLink {
+    /// The message both the build and `wanshi check` print for this link.
+    ///
+    /// One wording in one place, for the same reason the resolver is shared:
+    /// the build's own shorter line dropped the URL *as written* — the part
+    /// that usually shows the mistake, since this is nearly always a
+    /// relative-vs-absolute slip — along with the pointer to `refs sync` that
+    /// a missing cited work needs.
+    pub fn message(&self) -> String {
+        let mut message = format!(
+            "Dangling local link in `{}`: `{}` resolves to missing section `{}`.",
+            self.from, self.url, self.target
+        );
+        // A missing work is a different problem from a missing note: the note
+        // has to be written, the work only has to be imported.
+        if self
+            .target
+            .as_str()
+            .starts_with(&crate::environment::refs_dir())
+        {
+            message.push_str(" Run `wanshi refs sync` to generate it from the bibliography.");
+        }
+        message
+    }
+}
+
 /// Every local link in the forest that resolves to a missing section.
 ///
 /// Sorted, and deduplicated on the `(from, target, url)` triple, so repeating a
@@ -215,6 +241,37 @@ mod tests {
         assert_eq!(dangling.len(), 1, "the metadata link must be seen");
         assert_eq!(dangling[0].target, Slug::new("refs/missing"));
         assert_eq!(dangling[0].from, Slug::new("notes/a"));
+    }
+
+    // The build and `wanshi check` report the same condition, so they report
+    // it in the same words: the build's own shorter wording named only the
+    // resolved slug, leaving out the URL as written and the `refs sync`
+    // pointer that a missing cited work needs.
+    #[test]
+    fn test_dangling_link_message_names_the_url_and_hints_at_refs_sync() {
+        let _guard = crate::environment::mock_environment();
+
+        let note = DanglingLink {
+            from: Slug::new("notes/a"),
+            url: "./nowhere".to_string(),
+            target: Slug::new("notes/nowhere"),
+        };
+        assert_eq!(
+            note.message(),
+            "Dangling local link in `notes/a`: `./nowhere` resolves to missing section `notes/nowhere`."
+        );
+
+        let work = DanglingLink {
+            from: Slug::new("notes/a"),
+            url: "/refs/kkl1988".to_string(),
+            target: Slug::new("refs/kkl1988"),
+        };
+        assert!(
+            work.message()
+                .ends_with("Run `wanshi refs sync` to generate it from the bibliography."),
+            "a missing cited work points at the command that writes it: {}",
+            work.message()
+        );
     }
 
     #[test]

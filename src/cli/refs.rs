@@ -185,6 +185,7 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
     let mut unchanged = 0usize;
     let mut hand_written = 0usize;
     let mut uncitable = Vec::new();
+    let mut orphaned = Vec::new();
 
     for (target, origin) in &wanted {
         let segment = target
@@ -228,8 +229,19 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
         }
 
         let Some(&key) = by_slug_segment.get(segment) else {
-            if *origin == Origin::Cited {
-                uncitable.push(target.to_string());
+            match *origin {
+                Origin::Cited => uncitable.push(target.to_string()),
+                // A marker-carrying stub whose key has left the bibliography
+                // can never refresh again. Skipping it silently let the
+                // summary read "up to date" over exactly the drift this
+                // command exists to prevent, so the orphan is reported — but
+                // kept: whether the note should survive its entry is the
+                // author's call.
+                Origin::Existing => {
+                    if existing.is_some() {
+                        orphaned.push(path.clone());
+                    }
+                }
             }
             continue;
         };
@@ -279,17 +291,24 @@ pub fn sync(command: &RefsSyncCommand) -> eyre::Result<()> {
             bibliography_path
         );
     }
+    for path in &orphaned {
+        color_print::ceprintln!(
+            "<y>Warning:</> generated stub `{}` has no bibliography entry anymore; it will not refresh again.",
+            path
+        );
+    }
 
-    if created.is_empty() && refreshed.is_empty() && uncitable.is_empty() {
+    if created.is_empty() && refreshed.is_empty() && uncitable.is_empty() && orphaned.is_empty() {
         println!("Refs sync: up to date.");
     } else {
         println!(
-            "Refs sync: {} new, {} updated, {} unchanged, {} written by hand, {} cited but not in the bibliography.",
+            "Refs sync: {} new, {} updated, {} unchanged, {} written by hand, {} cited but not in the bibliography, {} orphaned.",
             created.len(),
             refreshed.len(),
             unchanged,
             hand_written,
-            uncitable.len()
+            uncitable.len(),
+            orphaned.len()
         );
     }
     Ok(())

@@ -137,18 +137,8 @@ fn collect_dangling_local_links(
     shallows: &HashMap<Slug, UnresolvedSection>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let refs_dir = environment::refs_dir();
     for dangling in links::dangling_local_links(shallows) {
-        let mut message = format!(
-            "Dangling local link in `{}`: `{}` resolves to missing section `{}`.",
-            dangling.from, dangling.url, dangling.target
-        );
-        // A missing work is a different problem from a missing note: the note
-        // has to be written, the work only has to be imported.
-        if dangling.target.as_str().starts_with(&refs_dir) {
-            message.push_str(" Run `wanshi refs sync` to generate it from the bibliography.");
-        }
-        diagnostics.push(Diagnostic::warning(message));
+        diagnostics.push(Diagnostic::warning(dangling.message()));
     }
 }
 
